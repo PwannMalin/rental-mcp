@@ -1,267 +1,108 @@
 import express from "express";
-import dotenv from "dotenv";
-import { z } from "zod";
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-
-import { listRentals } from "./tools/list-rentals.js";
-import { getRental } from "./tools/get-rental.js";
-import { downloadRental } from "./tools/download-rental.js";
-import { extractRental } from "./tools/extract-rental.js";
-
-// Power Automate search tools
-import { searchCustomer } from "./powerautomate/search-customer.js";
-import { searchEquipment } from "./powerautomate/search-equipment.js";
-import { searchModels } from "./powerautomate/search-models.js";
-import { searchRentalRequests } from "./powerautomate/search-rental-requests.js";
-
-dotenv.config();
+import { createRegistry } from "./logic/toolBootstrap.js";
+import { ChainEngine } from "./logic/chainEngine.js";
+import { registerWorkflows } from "./logic/workflows.js";
+import { formatCopilotResponse } from "./logic/formatCopilotResponse.js";
 
 const app = express();
+
 app.use(express.json());
 
-const server = new McpServer({
-  name: "rental-mcp",
-  version: "1.0.0"
-});
-
-//
-// -------------------------------
-// SMART SEARCH ROUTER
-// -------------------------------
-//
-function inferSearchType(query) {
-  const q = query.toLowerCase();
-
-  if (
-    q.includes("serial") ||
-    q.includes("vin") ||
-    q.includes("excavator") ||
-    q.includes("forklift") ||
-    q.includes("cat ") ||
-    q.includes("john deere")
-  ) {
-    return "equipment";
-  }
-
-  if (
-    q.includes("request") ||
-    q.includes("rental") ||
-    q.includes("order")
-  ) {
-    return "rental_request";
-  }
-
-  if (
-    q.includes("customer") ||
-    q.includes("@") ||
-    q.includes("email")
-  ) {
-    return "customer";
-  }
-
-  if (
-    q.includes("model") ||
-    q.includes("series")
-  ) {
-    return "model";
-  }
-
-  return null;
-}
-
-async function routeSearch({ query, type }) {
-  switch (type) {
-    case "customer":
-      return await searchCustomer({ search: query });
-
-    case "rental_request":
-      return await searchRentalRequests({ search: query });
-
-    case "equipment":
-      return await searchEquipment({ search: query });
-
-    case "model":
-      return await searchModels({ search: query });
-
-    default:
-      const [customers, rentals, equipment, models] =
-        await Promise.all([
-          searchCustomer({ search: query }),
-          searchRentalRequests({ search: query }),
-          searchEquipment({ search: query }),
-          searchModels({ search: query })
-        ]);
-
-      return {
-        customers,
-        rentals,
-        equipment,
-        models
-      };
-  }
-}
-
-//
-// -------------------------------
-// MCP TOOLS
-// -------------------------------
-//
-
-server.tool(
-  "list_rentals",
-  "List rental requests from Laserfiche",
-  {},
-  async () => {
-    const rentals = await listRentals();
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(rentals, null, 2)
+/*
+  TEMP MOCK CONTEXT
+  Replace later with real db / Power Automate / GitHub services
+*/
+const context = {
+    db: {
+        query: async (sql, params) => {
+            return [
+                {
+                    id: 1,
+                    name: "ABC Construction",
+                    rentalType: "Forklift",
+                    duration: "30 days"
+                }
+            ];
         }
-      ]
-    };
-  }
-);
+    },
 
-server.tool(
-  "get_rental",
-  "Get rental entry by ID",
-  {
-    id: z.number()
-  },
-  async ({ id }) => {
-    const rental = await getRental(id);
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(rental, null, 2)
+    azure: {
+        runFlow: async payload => {
+            return {
+                flowStarted: true,
+                flowName: "Rental Quote Workflow",
+                receivedPayload: payload
+            };
         }
-      ]
-    };
-  }
-);
+    },
 
-//
-// SMART UNIFIED SEARCH TOOL
-//
-server.tool(
-  "search",
-  "Smart unified search across customers, rentals, equipment, and models (auto-routes query)",
-  {
-    query: z.string()
-  },
-  async ({ query }) => {
-    const type = inferSearchType(query);
-
-    console.log("[SMART SEARCH]", { query, type });
-
-    const result = await routeSearch({ query, type });
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              query,
-              inferredType: type ?? "all",
-              result
-            },
-            null,
-            2
-          )
+    githubApi: {
+        searchRepositories: async query => {
+            return {
+                total_count: 0,
+                items: []
+            };
         }
-      ]
-    };
-  }
-);
-
-server.tool(
-  "extract_rental",
-  "Download rental PDF and parse HiddenJson",
-  {
-    id: z.number()
-  },
-  async ({ id }) => {
-    const pdfBuffer = await downloadRental(id);
-    const result = await extractRental(pdfBuffer);
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2)
-        }
-      ]
-    };
-  }
-);
-
-//
-// -------------------------------
-// MCP TRANSPORT
-// -------------------------------
-//
-
-app.post("/mcp", async (req, res) => {
-  const transport = new StreamableHTTPServerTransport();
-
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
-});
-
-//
-// -------------------------------
-// HEALTH
-// -------------------------------
-//
+    }
+};
 
 app.get("/", (req, res) => {
-  res.send("Rental MCP Running");
+    res.json({
+        status: "healthy",
+        service: "rental-mcp"
+    });
 });
 
-app.get("/ping", (req, res) => {
-  res.send("pong");
+app.post("/query", async (req, res) => {
+    try {
+        const { query } = req.body;
+
+        const registry = createRegistry(context);
+
+        const chainEngine = new ChainEngine(registry);
+
+        registerWorkflows(chainEngine);
+
+        const normalizedQuery =
+            String(query || "").toLowerCase();
+
+        let result;
+
+        if (
+            normalizedQuery.includes("create quote") ||
+            normalizedQuery.includes("generate quote") ||
+            normalizedQuery.includes("rental quote") ||
+            normalizedQuery.includes("submit quote") ||
+            normalizedQuery.includes("quote workflow") ||
+            normalizedQuery.includes("create a quote")
+        ) {
+            result = await chainEngine.run(
+                "rentalQuoteWorkflow",
+                { query },
+                context
+            );
+        } else {
+            result = await registry.route(query, context);
+        }
+
+        const copilotResponse =
+            formatCopilotResponse(result);
+
+        res.json(copilotResponse);
+
+    } catch (err) {
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
 });
 
-//
-// -------------------------------
-// LOCAL TEST ENDPOINTS
-// -------------------------------
-//
-
-app.get("/test-extract/:id", async (req, res) => {
-  try {
-    const pdfBuffer = await downloadRental(Number(req.params.id));
-    const result = await extractRental(pdfBuffer);
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/extract-rental/:id", async (req, res) => {
-  const pdfBuffer = await downloadRental(req.params.id);
-  const customers = await extractRental(pdfBuffer);
-  res.json(customers);
-});
-
-//
-// -------------------------------
-// START SERVER
-// -------------------------------
-//
-
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
 app.listen(port, () => {
-  console.log(`MCP listening on ${port}`);
-  console.log(`PID: ${process.pid}`);
+    console.log(`Listening on ${port}`);
 });
