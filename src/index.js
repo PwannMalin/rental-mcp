@@ -1,75 +1,140 @@
-console.log("INDEX STARTED");
 import "dotenv/config";
 import express from "express";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+import { listRentalRequests } from "./laserfiche/rentals.js";
+import { getEntry } from "./laserfiche/entries.js";
+import { exportDocumentPdf } from "./laserfiche/export.js";
+import { createFolder } from "./laserfiche/folders.js";
+import { mcpSafe } from "./utils/mcpSafe.js";
 
 import { createRegistry } from "./logic/toolBootstrap.js";
 import { ChainEngine } from "./logic/chainEngine.js";
 import { registerWorkflows } from "./logic/workflows.js";
-import { formatCopilotResponse } from "./logic/formatCopilotResponse.js";
 
+// ======================
+// MCP Server Setup
+// ======================
+const REPOSITORY_ID = process.env.REPOSITORYID || process.env.REPOSITORY_ID;
+const RENTAL_FOLDER_ID = process.env.RENTALFOLDERID || process.env.RENTAL_FOLDER_ID;
+
+const mcpServer = new Server(
+    { name: "rental-mcp", version: "1.0.0" },
+    { capabilities: { tools: {} } }
+);
+
+// Register MCP Tools
+mcpServer.tool(
+    "listrentalrequests",
+    "List all rental requests",
+    {},
+    async () => {
+        const rentals = await listRentalRequests(REPOSITORY_ID);
+        return {
+            content: [
+                { type: "text", text: JSON.stringify(rentals, null, 2) }
+            ]
+        };
+    }
+);
+
+mcpServer.tool(
+    "getrentalrequest",
+    "Retrieve a rental request by entry ID",
+    { entryId: z.number() },
+    async ({ entryId }) => {
+        const request = await getEntry(REPOSITORY_ID, entryId);
+        return {
+            content: [
+                { type: "text", text: JSON.stringify(request, null, 2) }
+            ]
+        };
+    }
+);
+
+mcpServer.tool(
+    "exportrentalrequestpdf",
+    "Export rental request as PDF",
+    { entryId: z.number() },
+    async ({ entryId }) => {
+        const pdf = await exportDocumentPdf(REPOSITORY_ID, entryId);
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: `PDF exported successfully. Size: ${pdf.length} bytes`
+                }
+            ]
+        };
+    }
+);
+
+mcpServer.tool(
+    "createrentalrequest",
+    "Create a Rental Workflow folder",
+    { customerName: z.string() },
+    async ({ customerName }) =>
+        mcpSafe(async () => {
+            const folder = await createFolder(
+                REPOSITORY_ID,
+                RENTAL_FOLDER_ID,
+                customerName,
+                true
+            );
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `✅ Folder created\n\n` +
+                              `Name: ${folder.name}\n` +
+                              `ID: ${folder.id}\n` +
+                              `Path: ${folder.fullPath}`
+                    }
+                ]
+            };
+        })
+);
+
+// Start MCP Server (stdio transport)
+async function startMcpServer() {
+    const transport = new StdioServerTransport();
+    await mcpServer.connect(transport);
+    console.log("✅ MCP Server (stdio) started");
+}
+
+// ======================
+// Express Server Setup
+// ======================
 const app = express();
-
 app.use(express.json({ limit: "25mb" }));
 
-/**
- * Runtime context
- *
- * The new Power Automate tools use process.env directly.
- * These fallback context handlers are mainly here so older tools
- * like db.search, github.searchRepo, and powerAutomate.runFlow
- * do not crash the server during testing.
- */
 const context = {
     db: {
         query: async (sql, params) => {
             console.log("Mock db.query called", { sql, params });
-
-            return [
-                {
-                    id: 1,
-                    name: "ABC Construction",
-                    rentalType: "Forklift",
-                    duration: "30 days"
-                }
-            ];
+            return [];
         }
     },
-
     azure: {
-        runFlow: async payload => {
+        runFlow: async (payload) => {
             console.log("Mock azure.runFlow called", payload);
-
-            return {
-                flowStarted: true,
-                flowName: "Mock Rental Quote Workflow",
-                receivedPayload: payload
-            };
+            return { flowStarted: true };
         }
     },
-
     githubApi: {
-        searchRepositories: async query => {
-            console.log("Mock githubApi.searchRepositories called", query);
-
-            return {
-                total_count: 0,
-                items: []
-            };
-        }
+        searchRepositories: async (query) => ({ totalcount: 0, items: [] })
     }
 };
 
-/**
- * Create registry and chain engine once at startup.
- */
+// Initialize registry and chain engine
 const registry = createRegistry(context);
-
 const chainEngine = new ChainEngine(registry);
 registerWorkflows(chainEngine);
 
-/**
- * Health endpoint for Azure Container Apps.
- */
+// Routes
 app.get("/", (req, res) => {
     res.json({
         status: "healthy",
@@ -78,75 +143,38 @@ app.get("/", (req, res) => {
     });
 });
 
-/**
- * List available tools.
- */
 app.get("/tools", (req, res) => {
-    res.json({
-        success: true,
-        tools: registry.list()
-    });
+    res.json({ success: true, tools: registry.list() });
 });
 
-/**
- * List available workflows.
- */
 app.get("/workflows", (req, res) => {
-    res.json({
-        success: true,
-        workflows: chainEngine.listWorkflows()
-    });
+    res.json({ success: true, workflows: chainEngine.listWorkflows() });
 });
 
-const port = process.env.PORT || 8080;
 app.post("/tool", async (req, res) => {
     try {
-
         const { tool, input } = req.body || {};
-
-        const result =
-            await registry.execute(
-                tool,
-                input || {},
-                context
-            );
-
+        const result = await registry.execute(tool, input || {}, context);
         res.json(result);
-
     } catch (err) {
-
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
 app.post("/query", async (req, res) => {
-
     try {
-
         const { query } = req.body || {};
-
-        const result =
-            await chainEngine.run(
-                "rentalQuoteWorkflow",
-                {
-                    query
-                },
-                context
-            );
-
+        const result = await chainEngine.run("rentalQuoteWorkflow", { query }, context);
         res.json(result);
-
     } catch (err) {
-
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
-app.listen(port, () => {
-    console.log(`Rental MCP server listening on port ${port}`);
+
+const port = process.env.PORT || 8080;
+
+// Start both servers
+app.listen(port, async () => {
+    console.log(`🚀 Rental MCP Express server listening on port ${port}`);
+    await startMcpServer();
 });

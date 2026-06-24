@@ -14,3 +14,4 @@ dist/
 build/
 
 *.log
+.vscode/settings.json
