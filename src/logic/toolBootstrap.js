@@ -28,7 +28,7 @@ export function createRegistry(context = {}) {
 registry.register({
     name: "search_customers",
 
-    description: "Search rental customers.",
+    description: "Find rental customers by customer name, account name, company name, or customer search term.",
 
     tags: ["customer", "search"],
 
@@ -47,7 +47,7 @@ registry.register({
 registry.register({
     name: "search_equipment",
 
-    description: "Search rental equipment.",
+    description: "Find rental equipment by model, manufacturer, category, equipment description, or equipment type.",
 
     tags: ["equipment", "search"],
 
@@ -88,7 +88,7 @@ registry.register({
 registry.register({
     name: "search_models",
 
-    description: "Search rental equipment models.",
+    description: "Find rental equipment models by model, manufacturer, category, equipment description, or equipment type.",
 
     tags: ["model", "search"],
 
@@ -107,7 +107,7 @@ registry.register({
 registry.register({
     name: "search_request_lines",
 
-    description: "Search rental request lines.",
+    description: "Find current rental requests and active rentals for a customer.",
 
     tags: ["request", "lines", "search"],
 

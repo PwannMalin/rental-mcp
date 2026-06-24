@@ -474,7 +474,13 @@ app.post("/query", async (req, res) => {
       );
   }
 });
-
+app.get("/mcp", (req, res) => {
+  res.json({
+    status: "ok",
+    protocol: "mcp",
+    transport: "streamable-http"
+  });
+});
 // =====================================================
 // Simple Natural-Language-ish Demo Endpoint
 // Optional, but helpful for testing quickly.
