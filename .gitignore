@@ -4,3 +4,13 @@ rental.pdf
 rental-mcp-1.0.tar
 *.tar
 rental-mcp.git/
+
+env
+.env.local
+.env.development
+.env.production
+
+dist/
+build/
+
+*.log
