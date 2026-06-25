@@ -1,5 +1,3 @@
-console.log("🔥 ENTRY FILE LOADED");
-
 import "dotenv/config";
 import express from "express";
 import { BotFrameworkAdapter } from "botbuilder";
@@ -8,154 +6,106 @@ import { createRegistry } from "./logic/toolBootstrap.js";
 import { CopilotOrchestrator } from "./agent/copilotOrchestrator.js";
 import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
-import { createTeamsUI } from "./ui/createTeamsUI.js";
-
-import { listRentalRequests } from "./laserfiche/rentals.js";
-import { getEntry } from "./laserfiche/entries.js";
-import { exportDocumentPdf } from "./laserfiche/export.js";
-import { createFolder } from "./laserfiche/folders.js";
-if (Object.keys(laserficheTools).length === 0) {
-    throw new Error("Laserfiche tools failed to initialize");
-}
-import { ChainEngine } from "./logic/chainEngine.js";
 import { registerWorkflows } from "./logic/workflows.js";
+import { ChainEngine } from "./logic/chainEngine.js";
+
+console.log("🔥 ENTRY FILE LOADED");
 
 // ======================
-// Core Setup
+// ENV CONFIG
 // ======================
-const memory = new MemoryStore(); // TODO: Replace with persistent store (Redis/Cosmos) in production
-const llm = createAzureOpenAI();
-
 const REPOSITORY_ID = process.env.REPOSITORY_ID || process.env.REPOSITORYID;
-const RENTAL_FOLDER_ID = Number(process.env.RENTAL_FOLDER_ID || process.env.RENTALFOLDERID || 67);
+const RENTAL_FOLDER_ID = Number(
+  process.env.RENTAL_FOLDER_ID || process.env.RENTALFOLDERID || 67
+);
 const PORT = process.env.PORT || 8080;
 
 if (!REPOSITORY_ID) console.warn("⚠️ REPOSITORY_ID is not set.");
 if (!RENTAL_FOLDER_ID) console.warn("⚠️ RENTAL_FOLDER_ID is not set.");
 
 // ======================
-// Context & Registry
+// BOOTSTRAP APP (SAFE ORDER)
 // ======================
-const context = {
-    db: { /* mock */ },
-    azure: { /* mock */ },
-    githubApi: { /* mock */ },
+async function bootstrap() {
+  try {
+    // ----------------------
+    // Core services
+    // ----------------------
+    const memory = new MemoryStore();
+    const llm = createAzureOpenAI();
+
+    // ----------------------
+    // Context (single source of truth)
+    // ----------------------
+    const context = {
+      db: {},
+      azure: {},
+      githubApi: {},
       ids: {
-    repository: REPOSITORY_ID,
-    rentalFolder: RENTAL_FOLDER_ID
-  }
-};
-
-const registry = createRegistry(context);
-const chainEngine = new ChainEngine(registry);
-registerWorkflows(chainEngine);
-
-const copilot = new CopilotOrchestrator({ registry, llm, memory });
-
-// ======================
-// Helper Functions (unchanged)
-// ======================
-function normalizeText(value) {
-    return String(value || "").trim().toLowerCase();
-}
-
-function cleanFolderName(value) {
-    return String(value || "")
-        .replace(/[<>:"/\\|?*]/g, "-")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-function createToolResponse(data) {
-    return { success: true, data };
-}
-
-function createToolError(error) {
-    console.error("Tool failed:", error);
-    return {
-        success: false,
-        error: error?.response?.data || error?.message || "Unknown error"
+        repository: REPOSITORY_ID,
+        rentalFolder: RENTAL_FOLDER_ID
+      }
     };
+
+    // ----------------------
+    // Tool Registry (FIXES YOUR CRASH)
+    // ----------------------
+    const registry = createRegistry(context);
+
+    if (!registry || Object.keys(registry).length === 0) {
+      throw new Error("Tool registry failed to initialize");
+    }
+
+    // ----------------------
+    // Workflow engine
+    // ----------------------
+    const chainEngine = new ChainEngine(registry);
+    registerWorkflows(chainEngine);
+
+    // ----------------------
+    // AI Orchestrator
+    // ----------------------
+    const copilot = new CopilotOrchestrator({
+      registry,
+      llm,
+      memory
+    });
+
+    // ----------------------
+    // Express server
+    // ----------------------
+    const app = express();
+
+    app.use(express.json());
+
+    // Health check (CRITICAL for Azure)
+    app.get("/", (req, res) => {
+      res.status(200).send("Rental MCP is running 🚀");
+    });
+
+    // Example API endpoint
+    app.post("/api/chat", async (req, res) => {
+      try {
+        const result = await copilot.handle(req.body);
+        res.json(result);
+      } catch (err) {
+        console.error("❌ Chat error:", err);
+        res.status(500).json({ error: "Internal error" });
+      }
+    });
+
+    // ----------------------
+    // START SERVER (CRITICAL)
+    // ----------------------
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+  } catch (err) {
+    console.error("💥 Fatal startup error:", err);
+    process.exit(1);
+  }
 }
 
-// ======================
-// Laserfiche Tools (unchanged)
-// ======================
-const laserficheTools = { /* ... same as before ... */ };
-
-// ======================
-// Express Server + Bot Adapter
-// ======================
-const app = express();
-
-// Important: Preserve raw body for Bot Framework Adapter
-app.use(express.json({
-    limit: "25mb",
-    verify: (req, res, buf) => {
-        req.rawBody = buf.toString("utf8");
-    }
-}));
-
-app.use(express.urlencoded({ extended: true, limit: "25mb" }));
-
-const adapter = new BotFrameworkAdapter({
-    appId: process.env.MicrosoftAppId,
-    appPassword: process.env.MicrosoftAppPassword
-});
-
-// Health Check
-app.get("/", (req, res) => {
-    res.json({
-        status: "healthy",
-        service: "rental-mcp",
-        repositoryConfigured: Boolean(REPOSITORY_ID),
-        rentalFolderId: RENTAL_FOLDER_ID,
-        timestamp: new Date().toISOString()
-    });
-});
-
-// Tools & Workflow endpoints (same as before)
-app.get("/tools", (req, res) => { /* ... */ });
-app.post("/tool", async (req, res) => { /* ... */ });
-app.post("/query", async (req, res) => { /* ... */ });
-app.post("/demo", async (req, res) => { /* ... */ });
-app.get("/mcp", (req, res) => { /* ... */ });
-
-// ======================
-// Teams Bot Endpoint (Correct Bot Framework setup)
-// ======================
-app.post("/api/messages", async (req, res) => {
-    try {
-        await adapter.processActivity(req, res, async (turnContext) => {
-            if (turnContext.activity.type !== "message") return;
-
-            console.log("🔥 MESSAGE:", turnContext.activity.text);
-
-            const ui = createTeamsUI(turnContext);
-
-            const result = await copilot.runStreaming(
-                turnContext.activity.text,
-                {
-                    userId: turnContext.activity.from.id,
-                   tenantId: context.activity.channelData?.tenant?.id || "default"
-                },
-                ui
-            );
-
-
-            await ui.sendFinal(result.answer || "Done.");
-        });
-    } catch (error) {
-        console.error("Bot error:", error);
-        res.status(500).send("Error processing message");
-    }
-});
-
-// ======================
-// Start Server
-// ======================
-app.listen(PORT, () => {
-    console.log(`🚀 Rental MCP server running on port ${PORT}`);
-    console.log("Available Laserfiche tools:", Object.keys(laserficheTools));
-    console.log("✅ Bot endpoint ready at /api/messages");
-});
+// Boot it
+bootstrap();
