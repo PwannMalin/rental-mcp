@@ -1,3 +1,5 @@
+console.log("🔥 ENTRY FILE LOADED");
+
 import "dotenv/config";
 import express from "express";
 import { BotFrameworkAdapter } from "botbuilder";
@@ -12,7 +14,9 @@ import { listRentalRequests } from "./laserfiche/rentals.js";
 import { getEntry } from "./laserfiche/entries.js";
 import { exportDocumentPdf } from "./laserfiche/export.js";
 import { createFolder } from "./laserfiche/folders.js";
-
+if (Object.keys(laserficheTools).length === 0) {
+    throw new Error("Laserfiche tools failed to initialize");
+}
 import { ChainEngine } from "./logic/chainEngine.js";
 import { registerWorkflows } from "./logic/workflows.js";
 
@@ -35,7 +39,11 @@ if (!RENTAL_FOLDER_ID) console.warn("⚠️ RENTAL_FOLDER_ID is not set.");
 const context = {
     db: { /* mock */ },
     azure: { /* mock */ },
-    githubApi: { /* mock */ }
+    githubApi: { /* mock */ },
+      ids: {
+    repository: REPOSITORY_ID,
+    rentalFolder: RENTAL_FOLDER_ID
+  }
 };
 
 const registry = createRegistry(context);
@@ -133,6 +141,7 @@ app.post("/api/messages", async (req, res) => {
                 },
                 ui
             );
+
 
             await ui.sendFinal(result.answer || "Done.");
         });

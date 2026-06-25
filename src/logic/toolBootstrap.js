@@ -10,6 +10,11 @@ import { emailTool } from "../tools/emailTool.js";
 import { userLookupTool } from "../tools/userLookupTool.js";
 import { searchTool } from "../tools/searchTool.js";
 
+import { listRentalRequests } from "../laserfiche/rentals.js";
+import { getEntry } from "../laserfiche/entries.js";
+import { exportDocumentPdf } from "../laserfiche/export.js";
+import { createFolder } from "../laserfiche/folders.js";
+
 export function createRegistry(context = {}) {
     const registry = new ToolRegistry();
 
@@ -143,6 +148,45 @@ registry.register({
             filterQuerydoor:
                 input.filterQuerydoor || ""
         });
+    }
+});
+
+registry.register({
+    name: "list_rental_requests",
+    description: "List rental request folders",
+    tags: ["laserfiche", "rental"],
+    async handler() {
+        const rentals = await listRentalRequests(context.REPOSITORY_ID);
+        return { count: rentals.length, rentals };
+    }
+});
+
+registry.register({
+    name: "get_rental_request",
+    description: "Get rental request entry",
+    async handler(input) {
+        return await getEntry(context.REPOSITORY_ID, Number(input.entryId));
+    }
+});
+
+registry.register({
+    name: "export_rental_request_pdf",
+    description: "Export rental request PDF",
+    async handler(input) {
+        return await exportDocumentPdf(context.REPOSITORY_ID, Number(input.entryId));
+    }
+});
+
+registry.register({
+    name: "create_rental_request",
+    description: "Create rental request folder",
+    async handler(input) {
+        return await createFolder(
+            context.REPOSITORY_ID,
+            context.RENTAL_FOLDER_ID,
+            input.customerName,
+            true
+        );
     }
 });
 
