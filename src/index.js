@@ -129,7 +129,7 @@ app.post("/api/messages", async (req, res) => {
                 turnContext.activity.text,
                 {
                     userId: turnContext.activity.from.id,
-                    tenantId: turnContext.activity.conversation.tenantId
+                   tenantId: context.activity.channelData?.tenant?.id || "default"
                 },
                 ui
             );
