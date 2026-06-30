@@ -8,16 +8,14 @@ export function createAzureOpenAI() {
         AZURE_OPENAI_API_VERSION = "2025-01-01-preview"
     } = process.env;
 
-    if (!AZURE_OPENAI_ENDPOINT) {
-        throw new Error("AZURE_OPENAI_ENDPOINT is missing");
-    }
-    if (!AZURE_OPENAI_API_KEY) {
-        throw new Error("AZURE_OPENAI_API_KEY is missing");
-    }
-    if (!AZURE_OPENAI_DEPLOYMENT) {
-        throw new Error("AZURE_OPENAI_DEPLOYMENT is missing - this is your deployment name (e.g. gpt-4o-mini)");
-    }
-
+    if (!AZURE_OPENAI_ENDPOINT) throw new Error("AZURE_OPENAI_ENDPOINT is missing");
+    if (!AZURE_OPENAI_API_KEY) throw new Error("AZURE_OPENAI_API_KEY is missing");
+    if (!AZURE_OPENAI_DEPLOYMENT) throw new Error("AZURE_OPENAI_DEPLOYMENT is missing");
+console.log({
+  endpoint: AZURE_OPENAI_ENDPOINT,
+  deployment: AZURE_OPENAI_DEPLOYMENT,
+  version: AZURE_OPENAI_API_VERSION
+});
     console.log(`✅ Azure OpenAI initialized with deployment: ${AZURE_OPENAI_DEPLOYMENT}`);
 
     return new OpenAI({

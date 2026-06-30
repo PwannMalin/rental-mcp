@@ -184,18 +184,25 @@ export class ToolRegistry {
     }
 
     async execute(name, input = {}, context = {}) {
-        const tool = this.tools.get(name);
+    console.log("🛠️ ToolRegistry.execute:", name);
+    console.log("📥 Tool input:", JSON.stringify(input));
 
-        if (!tool) {
-            return wrapTool(async () => {
-                throw new Error(`Tool not found: ${name}`);
-            }, "toolRegistry");
-        }
+    const tool = this.tools.get(name);
+
+    if (!tool) {
+        console.error("❌ Tool not found:", name);
 
         return wrapTool(async () => {
-            return await tool.handler(input, context);
-        }, name);
+            throw new Error(`Tool not found: ${name}`);
+        }, "toolRegistry");
     }
+
+    console.log("✅ Executing:", tool.name);
+
+    return wrapTool(async () => {
+        return await tool.handler(input, context);
+    }, name);
+}
 
     async route(query, context = {}) {
         const matches = this.search(query);

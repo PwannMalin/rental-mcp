@@ -1,12 +1,15 @@
 import "dotenv/config";
 import express from "express";
-import { BotFrameworkAdapter } from "botbuilder";
+import {
+  CloudAdapter,
+  ConfigurationBotFrameworkAuthentication
+} from "botbuilder";
 
 import { createRegistry } from "./logic/toolBootstrap.js";
 import { CopilotOrchestrator } from "./agent/copilotOrchestrator.js";
 import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
-import { createTeamsUI } from "./ui/createTeamsUI.js";   // ← Make sure this path is correct
+import { createTeamsUI } from "./ui/createTeamsUI.js";
 
 console.log("🔥 ENTRY FILE LOADED");
 
@@ -59,49 +62,58 @@ async function bootstrap() {
             res.json({
                 success: true,
                 AZURE_OPENAI_DEPLOYMENT: process.env.AZURE_OPENAI_DEPLOYMENT,
-                MicrosoftAppId: process.env.MicrosoftAppId ? "SET" : "MISSING",
-                MicrosoftAppPassword: process.env.MicrosoftAppPassword ? "SET" : "MISSING",
-                passwordLength: process.env.MicrosoftAppPassword ? process.env.MicrosoftAppPassword.length : 0
+                MicrosoftAppId: process.env.MicrosoftAppId ? "SET" : "MISSING"
             });
         });
 
-        // MCP endpoint
-        app.post("/mcp", async (req, res) => { /* your existing mcp code */ });
+        // MCP endpoint (keep your existing one)
 
         // ======================
         // TEAMS BOT
         // ======================
-        const adapter = new BotFrameworkAdapter({
-    appId: process.env.MicrosoftAppId,
-    appPassword: process.env.MicrosoftAppPassword
-});
+        const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(process.env);
+        const adapter = new CloudAdapter(botFrameworkAuthentication);
 
+        adapter.onTurnError = async (context, error) => {
+            console.error("💥 onTurnError:", error);
+            await context.sendActivity("Sorry, something went wrong.");
+        };
 
-    app.post("/api/messages", async (req, res) => {
-    console.log("📥 Request received at /api/messages");
+        app.post("/api/messages", async (req, res) => {
+            console.log("📥 Request received at /api/messages");
 
-    try {
-        await adapter.processActivity(req, res, async (turnContext) => {
-            if (turnContext.activity.type !== "message") {
-                console.log("Not a message activity");
-                return;
+            try {
+                await adapter.process(req, res, async (turnContext) => {
+                    if (turnContext.activity.type !== "message") {
+                        console.log("Not a message activity");
+                        return;
+                    }
+
+                    const text = (turnContext.activity.text || "").trim();
+                    console.log("🔥 MESSAGE:", text);
+
+                    const ui = createTeamsUI(turnContext);
+console.log("▶️ Calling copilot.runStreaming");
+                    try {
+                        const result = await copilot.runStreaming(
+                            text,
+                            {
+                                userId: turnContext.activity.from?.id,
+                                tenantId: turnContext.activity.conversation?.tenantId
+                            },
+                            ui
+                        );
+console.log("✅ Copilot returned:", result);
+                        await ui.sendFinal(result.answer || "I received your message.");
+                    } catch (err) {
+                        console.error("❌ Copilot error:", err.message);
+                        await turnContext.sendActivity("Sorry, I had trouble with that request.");
+                    }
+                });
+            } catch (err) {
+                console.error("💥 Critical handler error:", err.message);
             }
-
-            const text = (turnContext.activity.text || "").trim();
-            console.log("🔥 MESSAGE:", text);
-
-            // Always use fallback to avoid serviceUrl issue
-            console.log("Using fallback response");
-            res.json({ 
-                status: "ok", 
-                message: "✅ Bot received your message: " + text 
-            });
         });
-    } catch (err) {
-        console.error("💥 Critical error:", err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
 
         app.listen(PORT, () => {
             console.log(`🚀 MCP Server running on port ${PORT}`);
