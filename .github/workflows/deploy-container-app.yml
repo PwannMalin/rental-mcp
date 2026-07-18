@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: rentalcontainerreg                  # ← CHANGE THIS
-  CONTAINER_APP_NAME: rental-mcp-app      # ← CHANGE THIS
-  RESOURCE_GROUP: rg-rental-mcp-demo      # ← CHANGE THIS
+  ACR_NAME: rentalcontainerreg
+  CONTAINER_APP_NAME: rental-mcp-app
+  RESOURCE_GROUP: rg-rental-mcp-demo
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -44,3 +44,4 @@ jobs:
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           imageToDeploy: ${{ env.ACR_NAME }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ env.IMAGE_TAG }}
+          
