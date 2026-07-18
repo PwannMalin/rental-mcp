@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: rentalmcpacr                  # ← CHANGE THIS
+  ACR_NAME: rentalcontainerreg                  # ← CHANGE THIS
   CONTAINER_APP_NAME: rental-mcp-app      # ← CHANGE THIS
   RESOURCE_GROUP: rg-rental-mcp-demo      # ← CHANGE THIS
   IMAGE_TAG: ${{ github.sha }}
