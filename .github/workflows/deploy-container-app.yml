@@ -36,16 +36,6 @@ jobs:
           docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ env.IMAGE_TAG }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ env.IMAGE_TAG }}
 
-      - name: Deploy to Container App
-        uses: azure/container-apps-deploy-action@v1
-        with:
-         appSourcePath: ${{ github.workspace }}
-         acrName: ${{ env.ACR_NAME }}
-         containerAppName: ${{ env.CONTAINER_APP_NAME }}
-         resourceGroup: ${{ env.RESOURCE_GROUP }}
-         imageToDeploy: ${{ env.ACR_NAME }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ env.IMAGE_TAG }}
-         containerAppEnvironment: managedEnvironment-rgrentalmcpdemo-a1be
-
       - name: Update Container App
         run: |
           az containerapp update \
