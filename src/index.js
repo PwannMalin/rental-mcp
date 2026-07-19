@@ -81,8 +81,12 @@ async function bootstrap() {
         }));
 
         // Health & Debug
-        app.get("/", (req, res) => res.json({ status: "healthy", toolCount: Object.keys(toolSource).length }));
-
+        app.get("/health", (req, res) =>
+    res.json({
+        status: "healthy",
+        toolCount: Object.keys(toolSource).length
+    })
+);
         app.get("/debug", (req, res) => {
             res.json({
                 success: true,
