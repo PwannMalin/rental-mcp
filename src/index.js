@@ -66,6 +66,52 @@ async function bootstrap() {
             });
         });
 
+        app.get("/tools", (req, res) => {
+    const tools = Object.values(toolSource).map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        tags: tool.tags || []
+    }));
+
+    res.json({
+        success: true,
+        count: tools.length,
+        tools
+    });
+});
+
+app.get("/test/github/list-branches", async (req, res) => {
+    try {
+        const tool = toolSource["github.listBranches"];
+
+        if (!tool) {
+            return res.status(404).json({
+                success: false,
+                error: "github.listBranches tool not found",
+                availableTools: Object.keys(toolSource)
+            });
+        }
+
+        const result = await tool.handler({
+            owner: req.query.owner || "PwannMalin",
+            repo: req.query.repo || "rental-mcp"
+        });
+
+        res.json({
+            success: true,
+            tool: "github.listBranches",
+            result
+        });
+    } catch (err) {
+        console.error("❌ github.listBranches test failed:", err);
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
         // MCP endpoint (keep your existing one)
 
         // ======================
