@@ -112,6 +112,40 @@ app.get("/test/github/list-branches", async (req, res) => {
     }
 });
 
+app.get("/test/github/create-branch", async (req, res) => {
+    try {
+        const tool = toolSource["github.createBranch"];
+
+        if (!tool) {
+            return res.status(404).json({
+                success: false,
+                error: "github.createBranch tool not found"
+            });
+        }
+
+        const branchName =
+            req.query.branch ||
+            `test-${Date.now()}`;
+
+        const result = await tool.handler({
+            branchName
+        });
+
+        res.json({
+            success: true,
+            tool: "github.createBranch",
+            result
+        });
+    } catch (err) {
+        console.error("❌ github.createBranch failed:", err);
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
         // MCP endpoint (keep your existing one)
 
         // ======================
