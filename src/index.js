@@ -21,6 +21,30 @@ const RENTAL_FOLDER_ID = Number(process.env.RENTAL_FOLDER_ID || process.env.RENT
 const PORT = process.env.PORT || 8080;
 
 // ======================
+// DEBUG AUTH
+// ======================
+function requireDebug(req, res, next) {
+const expectedKey = process.env.DEBUG_KEY;
+
+if (!expectedKey) {
+return res.status(500).json({
+success: false,
+error: "DEBUG_KEY not configured"
+});
+}
+
+const providedKey = req.headers["x-debug-key"];
+
+if (providedKey !== expectedKey) {
+return res.status(401).json({
+success: false,
+error: "Unauthorized"
+});
+}
+
+next();
+}
+// ======================
 // BOOTSTRAP
 // ======================
 async function bootstrap() {
@@ -50,6 +74,7 @@ async function bootstrap() {
 
         const app = express();
 
+        app.use(express.static("public"));
         app.use(express.json({
             limit: "25mb",
             verify: (req, res, buf) => { req.rawBody = buf.toString(); }
@@ -112,80 +137,36 @@ app.get("/test/github/list-branches", async (req, res) => {
     }
 });
 
-app.get("/test/github/create-branch", async (req, res) => {
+app.post("/chat", async (req, res) => {
+
     try {
-        const tool = toolSource["github.createBranch"];
 
-        if (!tool) {
-            return res.status(404).json({
-                success: false,
-                error: "github.createBranch tool not found"
-            });
-        }
+        const message = req.body.message;
 
-        const branchName =
-            req.query.branch ||
-            `test-${Date.now()}`;
-
-        const result = await tool.handler({
-            branchName
-        });
+        const result =
+            await copilot.runStreaming(
+                message,
+                {},
+                {
+                    typing: async () => {},
+                    update: async () => {},
+                    sendFinal: async () => {}
+                }
+            );
 
         res.json({
             success: true,
-            tool: "github.createBranch",
-            result
+            answer: result.answer
         });
+
     } catch (err) {
-        console.error("❌ github.createBranch failed:", err);
 
         res.status(500).json({
             success: false,
             error: err.message
         });
+
     }
-});
-
-app.get("/test/github/get-readme", async (req, res) => {
-
-    const tool = toolSource["github.getFile"];
-
-    const result = await tool.handler({
-        branch: "main",
-        path: "README.md"
-    });
-
-    res.json(result);
-
-});
-
-app.get("/test/github/update-file", async (req, res) => {
-
-    const tool = toolSource["github.updateFile"];
-
-    const result = await tool.handler({
-        branch: "test-1784494953848",
-        path: "mcp-test.txt",
-        content: "Hello from Azure MCP",
-        message: "Test MCP commit"
-    });
-
-    res.json(result);
-
-});
-
-app.get("/test/github/create-pr", async (req, res) => {
-
-    const tool =
-        toolSource["github.createPullRequest"];
-
-    const result = await tool.handler({
-        branch: "test-1784494953848",
-        title: "MCP GitHub Integration Test",
-        description: "Testing Azure MCP GitHub tooling"
-    });
-
-    res.json(result);
 
 });
 

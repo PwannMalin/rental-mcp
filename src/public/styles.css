@@ -1,0 +1,39 @@
+body {
+    font-family: Segoe UI;
+    max-width: 900px;
+    margin: auto;
+    padding: 20px;
+}
+
+#chat {
+    height: 70vh;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 15px;
+}
+
+.message {
+    margin-bottom: 10px;
+}
+
+.user {
+    color: blue;
+}
+
+.assistant {
+    color: green;
+}
+
+.input-area {
+    display: flex;
+    margin-top: 10px;
+}
+
+input {
+    flex: 1;
+    padding: 10px;
+}
+
+button {
+    padding: 10px;
+}
