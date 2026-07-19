@@ -336,3 +336,5 @@ export function githubTool(context = {}) {
         createPullRequestTool(context)
     ];
 }
+
+console.log("✅ GitHub tools loaded");
