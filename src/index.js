@@ -141,6 +141,17 @@ app.get("/test/github/list-branches", async (req, res) => {
     }
 });
 
+app.get("/test/search/raymond", async (req, res) => {
+
+    const tool = toolSource["search_equipment"];
+
+    const result = await tool.handler({
+        searchText: "Raymond"
+    });
+
+    res.json(result);
+});
+
 app.post("/chat", async (req, res) => {
 
     try {
