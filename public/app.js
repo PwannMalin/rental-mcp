@@ -2,8 +2,14 @@ const chat =
     document.getElementById("chat");
 
 document
-    .getElementById("send")
-    .addEventListener("click", sendMessage);
+    .getElementById("message")
+    .addEventListener("keydown", e => {
+
+        if (e.key === "Enter") {
+            sendMessage();
+        }
+
+    });
 
 async function sendMessage() {
 
@@ -15,7 +21,7 @@ async function sendMessage() {
 
     if (!text) return;
 
-    addMessage("user", text);
+    addMessage("assistant", "Thinking...");
 
     input.value = "";
 
