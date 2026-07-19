@@ -15,6 +15,8 @@ import { getEntry } from "../laserfiche/entries.js";
 import { exportDocumentPdf } from "../laserfiche/export.js";
 import { createFolder } from "../laserfiche/folders.js";
 
+
+
 export function createRegistry(context = {}) {
     console.log("🔨 toolBootstrap: createRegistry called");
 
@@ -22,7 +24,7 @@ export function createRegistry(context = {}) {
 
     try {
         // === Core Tools ===
-        registry.register(githubTool(context));
+        githubTool(context).forEach(tool => registry.register(tool));
         registry.register(powerAutomateTool(context));
         registry.register(dbTool(context));
 
