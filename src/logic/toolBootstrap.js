@@ -24,7 +24,13 @@ export function createRegistry(context = {}) {
 
     try {
         // === Core Tools ===
-        githubTool(context).forEach(tool => registry.register(tool));
+       const githubTools = githubTool(context);
+
+githubTools.forEach(tool => registry.register(tool));
+
+console.log(
+    `✅ GitHub tools registered: ${githubTools.map(tool => tool.name).join(", ")}`
+);
         registry.register(powerAutomateTool(context));
         registry.register(dbTool(context));
 
