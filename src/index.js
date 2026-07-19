@@ -174,6 +174,21 @@ app.get("/test/github/update-file", async (req, res) => {
 
 });
 
+app.get("/test/github/create-pr", async (req, res) => {
+
+    const tool =
+        toolSource["github.createPullRequest"];
+
+    const result = await tool.handler({
+        branch: "test-1784494953848",
+        title: "MCP GitHub Integration Test",
+        description: "Testing Azure MCP GitHub tooling"
+    });
+
+    res.json(result);
+
+});
+
 
         // MCP endpoint (keep your existing one)
 
