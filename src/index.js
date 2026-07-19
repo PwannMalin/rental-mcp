@@ -146,6 +146,19 @@ app.get("/test/github/create-branch", async (req, res) => {
     }
 });
 
+app.get("/test/github/get-readme", async (req, res) => {
+
+    const tool = toolSource["github.getFile"];
+
+    const result = await tool.handler({
+        branch: "main",
+        path: "README.md"
+    });
+
+    res.json(result);
+
+});
+
         // MCP endpoint (keep your existing one)
 
         // ======================
