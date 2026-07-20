@@ -43,6 +43,10 @@ console.log(
         registry.register(userLookupTool(context));
         registry.register(searchTool(context));
         registerWorkflows(chainEngine);
+console.log(
+    "Registered workflows:",
+    chainEngine.listWorkflows()
+);
 
         console.log("✅ Core tools registered successfully");
 

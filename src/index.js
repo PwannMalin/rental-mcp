@@ -67,6 +67,15 @@ async function bootstrap() {
     registry,
     chainEngine
 } = createRegistry(context);
+
+console.log("Chain Engine:", !!chainEngine);
+
+if (chainEngine) {
+    console.log(
+        "Available Workflows:",
+        chainEngine.listWorkflows()
+    );
+}
         const toolSource = registry?.tools instanceof Map 
             ? Object.fromEntries(registry.tools.entries()) 
             : (registry?.tools || registry || {});
