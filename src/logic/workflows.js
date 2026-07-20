@@ -58,6 +58,8 @@ function getCreatedRequestId(previousResult) {
 
 function getCustomerSearchResults(result) {
     return (
+        result?.data?.rows ||
+        result?.data?.preview ||
         result?.rows ||
         result?.preview ||
         result?.result?.data?.data?.value ||
@@ -185,13 +187,13 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
        console.log(
 "PREVIOUS RESULT FROM CUSTOMER SEARCH:"
 );
- 
-console.log(
-JSON.stringify(
-previousResult,
-null,
 
-)
+console.log(
+    JSON.stringify(
+        previousResult,
+        null,
+        2
+    )
 );
 
         const customerSearch =
