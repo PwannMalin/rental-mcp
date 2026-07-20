@@ -151,16 +151,17 @@ app.get("/test/search/all-equipment", async (req, res) => {
     res.json(result);
 });
 
-app.get("/test/search/equipment-manufacturer", async (req, res) => {
+app.get("/test/search/rental", async (req, res) => {
 
-    const tool = toolSource["search_equipment"];
+    const tool = toolSource["search.execute"];
 
     const result = await tool.handler({
-        field: "Manufacturer",
-        SearchTerm: "Raymond"
+        type: "RENTAL",
+        SearchTerm: "Amazon"
     });
 
     res.json(result);
+
 });
 
 

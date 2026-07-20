@@ -1,5 +1,5 @@
 import { callPowerAutomate } from "../logic/powerAutomateClient.js";
-console.log("SEARCH TOOL VERSION 2");
+
 
 const SEARCH_TYPES = {
     CUSTOMER: {
@@ -186,11 +186,7 @@ if (type === "EQUIPMENT") {
 
     console.log("Equipment header search term:", equipmentSearchTerm);
 }
-console.log("HEADERS BEING SENT:");
-console.log(JSON.stringify(headers, null, 2));
 
-console.log("PAYLOAD BEING SENT:");
-console.log(JSON.stringify(payload, null, 2));
 const flowResponse = await callPowerAutomate({
     url: process.env[config.env],
     payload,
@@ -215,7 +211,10 @@ const flowResponse = await callPowerAutomate({
             [];
 
         const safeRows = Array.isArray(rows) ? rows : [];
-
+console.log(
+    "ROWS LENGTH:",
+    Array.isArray(rows) ? rows.length : "NOT ARRAY"
+);
         console.log(
     "FIRST ROW:",
     JSON.stringify(
