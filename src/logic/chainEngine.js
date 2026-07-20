@@ -82,7 +82,7 @@ export class ChainEngine {
                 };
             }
 
-            lastResult = result.data;
+            lastResult = result;
 
             currentInput = {
                 ...currentInput,
