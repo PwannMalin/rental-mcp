@@ -153,6 +153,20 @@ app.get("/test/github/list-branches", async (req, res) => {
     }
 });
 
+app.get("/test/customer-search", async (req, res) => {
+
+    const result = await registry.execute(
+        "search.execute",
+        {
+            type: "CUSTOMER",
+            SearchTerm: req.query.customer || "Amazon"
+        }
+    );
+
+    res.json(result);
+
+});
+
 app.get("/test/search/all-equipment", async (req, res) => {
     const tool = toolSource["search_equipment"];
 
