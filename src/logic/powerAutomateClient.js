@@ -19,16 +19,14 @@ export async function callPowerAutomate({
         console.log(JSON.stringify(headers, null, 2));
 console.log("FINAL REQUEST HEADERS:");
 console.log(JSON.stringify(headers, null, 2));
-        const response = await axios.post(
-            url,
-            payload,
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    ...headers
-                }
-            }
-        );
+       const response = await axios.get(
+    url,
+    {
+        headers,
+        params: payload
+    }
+);
+
 
         console.log(`${flowName} succeeded`);
         console.log(JSON.stringify(response.data, null, 2));
