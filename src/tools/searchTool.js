@@ -32,9 +32,27 @@ const SEARCH_TYPES = {
 };
 
 const EQUIPMENT_FIELDS = [
-    "EquipSeries", "EquipModel", "Description", "Category", 
-    "Branch", "Status", "Manufacturer"
+    "Serial",
+    "Make",
+    "Model",
+    "Series",
+    "OACH",
+    "Descrip"
 ];
+
+const EQUIPMENT_ALIASES = {
+    raymond: "RAYE",
+    crown: "CROW",
+    hyster: "HYST",
+    yale: "YALE",
+    toyota: "TOYO"
+};
+
+const adjustedSearch =
+    EQUIPMENT_ALIASES[
+        searchTerm.toLowerCase()
+    ] || searchTerm;
+
 
 function escapeOData(value = "") {
     return String(value).replace(/'/g, "''");
@@ -163,6 +181,14 @@ parameters: {
 
         const safeRows = Array.isArray(rows) ? rows : [];
 
+        console.log(
+    "FIRST ROW:",
+    JSON.stringify(
+        safeRows[0],
+        null,
+        2
+    )
+);
         const limit = Number(input.limit || input.top || 10);
         const preview = safeRows.slice(0, limit);
 
