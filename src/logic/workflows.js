@@ -185,10 +185,17 @@ console.log(
 "CUSTOMER SEARCH RESULT:",
 JSON.stringify(previousResult, null, 2)
 );
-            const customers =
-                previousResult?.rows ||
-                previousResult?.preview ||
-                [];
+            console.log(
+    "PREVIOUS RESULT:",
+    JSON.stringify(previousResult, null, 2)
+);
+
+const customers =
+    previousResult?.rows ||
+    previousResult?.preview ||
+    previousResult?.data?.rows ||
+    previousResult?.data?.preview ||
+    [];
 
             const customer = customers[0];
 
