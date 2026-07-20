@@ -1,5 +1,6 @@
 import { callPowerAutomate } from "../logic/powerAutomateClient.js";
-
+console.log("SEARCH TOOL VERSION 2");
+console.log("Equipment fields:", EQUIPMENT_FIELDS);
 const SEARCH_TYPES = {
     CUSTOMER: {
         env: "PA_SEARCH_CUSTOMERS_URL",
