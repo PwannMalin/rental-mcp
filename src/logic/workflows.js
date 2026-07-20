@@ -181,7 +181,10 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
         name: "findRentalRequests",
         tool: "search.execute",
         mapInput: (input, previousResult) => {
-
+console.log(
+"CUSTOMER SEARCH RESULT:",
+JSON.stringify(previousResult, null, 2)
+);
             const customers =
                 previousResult?.rows ||
                 previousResult?.preview ||
