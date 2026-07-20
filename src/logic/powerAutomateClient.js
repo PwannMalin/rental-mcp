@@ -27,7 +27,8 @@ export async function callPowerAutomate({
 
         console.log(`${flowName} succeeded`);
         console.log(response.data);
-
+console.log("ACTUAL RESPONSE:");
+console.log(JSON.stringify(response.data, null, 2));
         return {
             flowName,
             status: response.status,
