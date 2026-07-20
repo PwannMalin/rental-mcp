@@ -43,8 +43,10 @@ const EQUIPMENT_FIELDS = [
 
 const EQUIPMENT_ALIASES = {
     raymond: "RAYE",
-    ray: "RAYE",
-    raye: "RAYE"
+    crown: "CROW",
+    hyster: "HYST",
+    toyota: "TOYO",
+    yale: "YALE"
 };
 console.log("Equipment fields:", EQUIPMENT_FIELDS);
 function normalizeEquipmentSearchTerm(value = "") {
