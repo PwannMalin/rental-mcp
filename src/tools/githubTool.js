@@ -214,6 +214,7 @@ const updateFileTool = () => ({
         "Create or update a file on a GitHub branch. Use this after creating a branch.",
     tags: ["github", "file", "commit", "update"],
 
+
     async handler(input = {}) {
         const owner = input.owner || DEFAULT_OWNER;
         const repo = input.repo || DEFAULT_REPO;
@@ -225,6 +226,10 @@ const updateFileTool = () => ({
         if (!branch) {
             throw new Error("branch is required.");
         }
+
+        if (!branch || branch === "main") {
+    throw new Error("github.updateFile requires a non-main branch.");
+}
 
         if (!path) {
             throw new Error("path is required.");
