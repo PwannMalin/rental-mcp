@@ -224,15 +224,15 @@ const customer = customers[0];
             };
         }
 
-        const customerNumber = String(
-            customer.CustomerNumber ||
-            customer.CustomerNo ||
-            customer.CustomerID ||
-            customer.CustomerId ||
-            customer.customerNumber ||
-            customer.Customer ||
-            ""
-        ).trim();
+        const customerNumber =
+    customer?.CustomerNumber?.trim();
+
+console.log(
+    "CUSTOMER NUMBER:",
+    customerNumber
+);
+
+
 
         if (!customerNumber) {
             console.warn(
@@ -240,10 +240,10 @@ const customer = customers[0];
                 customer
             );
 
-            return {
-                type: "RENTAL",
-                filterQuery: "1 eq 0"
-            };
+           return {
+    type: "RENTAL",
+    filterQuery: `Customer eq '${customerNumber}'`
+};
         }
 
         const rentalFilter = `Customer eq '${customerNumber}'`;
