@@ -1,6 +1,6 @@
 import { callPowerAutomate } from "../logic/powerAutomateClient.js";
 console.log("SEARCH TOOL VERSION 2");
-console.log("Equipment fields:", EQUIPMENT_FIELDS);
+
 const SEARCH_TYPES = {
     CUSTOMER: {
         env: "PA_SEARCH_CUSTOMERS_URL",
@@ -46,7 +46,7 @@ const EQUIPMENT_ALIASES = {
     ray: "RAYE",
     raye: "RAYE"
 };
-
+console.log("Equipment fields:", EQUIPMENT_FIELDS);
 function normalizeEquipmentSearchTerm(value = "") {
     const raw = String(value || "").trim();
     const key = raw.toLowerCase();
