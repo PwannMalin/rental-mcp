@@ -54,10 +54,7 @@ function normalizeEquipmentSearchTerm(value = "") {
     return EQUIPMENT_ALIASES[key] || raw;
 };
 
-const adjustedSearch =
-    EQUIPMENT_ALIASES[
-        searchTerm.toLowerCase()
-    ] || searchTerm;
+
 
 
 function escapeOData(value = "") {
@@ -141,7 +138,17 @@ parameters: {
             };
         }
 
-        const searchTerm = input.SearchTerm || input.searchTerm || input.query || "";
+        const searchTerm =
+    input.SearchTerm ||
+    input.searchTerm ||
+    input.query ||
+    "";
+
+const normalizedSearchTerm =
+    type === "EQUIPMENT"
+        ? normalizeEquipmentSearchTerm(searchTerm)
+        : searchTerm;
+
 
         if (!searchTerm && !input.filterQuery) {
             return {
@@ -150,9 +157,13 @@ parameters: {
             };
         }
 
-        const payload = {
-            filterQuery: buildFilter(type, searchTerm, input)
-        };
+     const payload = {
+    filterQuery: buildFilter(
+        type,
+        normalizedSearchTerm,
+        input
+    )
+};
 
         if (type === "CUSTOMER_INFO") {
             payload.filterQuerydoor = input.filterQuerydoor || "";
@@ -166,7 +177,8 @@ parameters: {
         let headers = {};
 
 if (type === "EQUIPMENT") {
-    const equipmentSearchTerm = normalizeEquipmentSearchTerm(searchTerm);
+    const equipmentSearchTerm =
+    normalizedSearchTerm;
 
     headers = {
         equipsearchtext: equipmentSearchTerm
