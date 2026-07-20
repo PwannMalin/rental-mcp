@@ -27,6 +27,10 @@ console.log(JSON.stringify(headers, null, 2));
     }
 );
 
+console.log("METHOD: GET");
+console.log("URL:", url);
+console.log("HEADERS:", headers);
+console.log("PARAMS:", payload);
 
         console.log(`${flowName} succeeded`);
         console.log(JSON.stringify(response.data, null, 2));
