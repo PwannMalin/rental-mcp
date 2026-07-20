@@ -151,6 +151,19 @@ app.get("/test/search/all-equipment", async (req, res) => {
     res.json(result);
 });
 
+app.get("/test/search/equipment-manufacturer", async (req, res) => {
+
+    const tool = toolSource["search_equipment"];
+
+    const result = await tool.handler({
+        field: "Manufacturer",
+        SearchTerm: "Raymond"
+    });
+
+    res.json(result);
+});
+
+
 app.get("/test/search/models", async (req, res) => {
 
     const tool = toolSource["search_models"];
