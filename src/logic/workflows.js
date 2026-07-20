@@ -177,49 +177,76 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
         })
     },
 
-    {
-        name: "findRentalRequests",
-        tool: "search.execute",
-        mapInput: (input, previousResult) => {
-console.log(
-"CUSTOMER SEARCH RESULT:",
-JSON.stringify(previousResult, null, 2)
-);
-            console.log(
-    "PREVIOUS RESULT:",
-    JSON.stringify(previousResult, null, 2)
-);
+  {
+    name: "findRentalRequests",
+    tool: "search.execute",
+    mapInput: (input, previousResult) => {
 
-const customers =
-    previousResult?.rows ||
-    previousResult?.preview ||
-    previousResult?.data?.rows ||
-    previousResult?.data?.preview ||
-    [];
+        console.log(
+            "CUSTOMER SEARCH PREVIOUS RESULT:",
+            JSON.stringify(previousResult, null, 2)
+        );
 
-            const customer = customers[0];
+        const customerSearch =
+            previousResult?.data ||
+            previousResult;
 
-            if (!customer) {
-                return {
-                    type: "RENTAL",
-                    filterQuery: "1 eq 0"
-                };
-            }
+        const customers =
+            customerSearch?.rows ||
+            customerSearch?.preview ||
+            customerSearch?.results?.value ||
+            customerSearch?.value ||
+            [];
 
-            const customerNumber =
-                customer.CustomerNumber ||
-                customer.CustomerNo ||
-                customer.CustomerID ||
-                customer.CustomerId ||
-                customer.customerNumber ||
-                customer.Customer;
+        const customer = customers[0];
+
+        if (!customer) {
+            console.warn("No customer found for rental request search.");
 
             return {
                 type: "RENTAL",
-                filterQuery: `Customer eq '${customerNumber}'`
+                filterQuery: "1 eq 0"
             };
         }
+
+        const customerNumber = String(
+            customer.CustomerNumber ||
+            customer.CustomerNo ||
+            customer.CustomerID ||
+            customer.CustomerId ||
+            customer.customerNumber ||
+            customer.Customer ||
+            ""
+        ).trim();
+
+        if (!customerNumber) {
+            console.warn(
+                "Customer found but no customer number field was available:",
+                customer
+            );
+
+            return {
+                type: "RENTAL",
+                filterQuery: "1 eq 0"
+            };
+        }
+
+        const rentalFilter = `Customer eq '${customerNumber}'`;
+
+        console.log("Customer found:", {
+            name: customer.CustomerName || customer.Name || customer.name,
+            customerNumber
+        });
+
+        console.log("Rental request filter:", rentalFilter);
+
+        return {
+            type: "RENTAL",
+            filterQuery: rentalFilter
+        };
     }
+}
+
 ]);
     chainEngine.registerWorkflow("emailQuoteWorkflow", [
         {

@@ -208,13 +208,18 @@ const flowResponse = await callPowerAutomate({
           }
         */
 
-        const rows =
-            flowResponse?.data?.value ||
-            flowResponse?.value ||
-            flowResponse?.data ||
-            [];
+        const responseBody = flowResponse?.data || {};
 
-        const safeRows = Array.isArray(rows) ? rows : [];
+const rows =
+    responseBody?.value ||
+    responseBody?.results?.value ||
+    responseBody?.data?.value ||
+    responseBody?.data?.results?.value ||
+    flowResponse?.value ||
+    [];
+
+const safeRows = Array.isArray(rows) ? rows : [];
+
 console.log(
     "ROWS LENGTH:",
     Array.isArray(rows) ? rows.length : "NOT ARRAY"
