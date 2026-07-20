@@ -150,7 +150,18 @@ app.get("/test/search/all-equipment", async (req, res) => {
 
     res.json(result);
 });
-``
+
+app.get("/test/search/models", async (req, res) => {
+
+    const tool = toolSource["search_models"];
+
+    const result = await tool.handler({
+        searchText: ""
+    });
+
+    res.json(result);
+
+});
 
 app.post("/chat", async (req, res) => {
 
