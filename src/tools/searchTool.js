@@ -42,10 +42,15 @@ const EQUIPMENT_FIELDS = [
 
 const EQUIPMENT_ALIASES = {
     raymond: "RAYE",
-    crown: "CROW",
-    hyster: "HYST",
-    yale: "YALE",
-    toyota: "TOYO"
+    ray: "RAYE",
+    raye: "RAYE"
+};
+
+function normalizeEquipmentSearchTerm(value = "") {
+    const raw = String(value || "").trim();
+    const key = raw.toLowerCase();
+
+    return EQUIPMENT_ALIASES[key] || raw;
 };
 
 const adjustedSearch =
