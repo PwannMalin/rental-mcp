@@ -57,7 +57,12 @@ function getCreatedRequestId(previousResult) {
 }
 
 function getCustomerSearchResults(result) {
-    return result?.result?.data?.data?.value || [];
+    return (
+        result?.rows ||
+        result?.preview ||
+        result?.result?.data?.data?.value ||
+        []
+    );
 }
 
 function extractCustomerName(query = "") {
@@ -156,8 +161,56 @@ export function registerWorkflows(chainEngine) {
         }
     ]);
 
-    // =================================================================
 
+    // =================================================================
+chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
+    {
+        name: "findCustomer",
+        tool: "search.execute",
+        mapInput: (input) => ({
+            type: "CUSTOMER",
+            SearchTerm:
+                input.SearchTerm ||
+                input.searchTerm ||
+                input.query ||
+                ""
+        })
+    },
+
+    {
+        name: "findRentalRequests",
+        tool: "search.execute",
+        mapInput: (input, previousResult) => {
+
+            const customers =
+                previousResult?.rows ||
+                previousResult?.preview ||
+                [];
+
+            const customer = customers[0];
+
+            if (!customer) {
+                return {
+                    type: "RENTAL",
+                    filterQuery: "1 eq 0"
+                };
+            }
+
+            const customerNumber =
+                customer.CustomerNumber ||
+                customer.CustomerNo ||
+                customer.CustomerID ||
+                customer.CustomerId ||
+                customer.customerNumber ||
+                customer.Customer;
+
+            return {
+                type: "RENTAL",
+                filterQuery: `Customer eq '${customerNumber}'`
+            };
+        }
+    }
+]);
     chainEngine.registerWorkflow("emailQuoteWorkflow", [
         {
             name: "findRecipient",

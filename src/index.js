@@ -63,7 +63,10 @@ async function bootstrap() {
             RENTAL_FOLDER_ID
         };
 
-        const registry = createRegistry(context);
+        const {
+    registry,
+    chainEngine
+} = createRegistry(context);
         const toolSource = registry?.tools instanceof Map 
             ? Object.fromEntries(registry.tools.entries()) 
             : (registry?.tools || registry || {});

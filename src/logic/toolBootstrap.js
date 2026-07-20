@@ -15,13 +15,16 @@ import { getEntry } from "../laserfiche/entries.js";
 import { exportDocumentPdf } from "../laserfiche/export.js";
 import { createFolder } from "../laserfiche/folders.js";
 
+import { ChainEngine } from "./chainEngine.js";
+import { registerWorkflows } from "./workflows.js";
+
 
 
 export function createRegistry(context = {}) {
     console.log("🔨 toolBootstrap: createRegistry called");
 
     const registry = new ToolRegistry();
-
+const chainEngine = new ChainEngine(registry);
     try {
         // === Core Tools ===
        const githubTools = githubTool(context);
@@ -39,6 +42,7 @@ console.log(
         registry.register(emailTool(context));
         registry.register(userLookupTool(context));
         registry.register(searchTool(context));
+        registerWorkflows(chainEngine);
 
         console.log("✅ Core tools registered successfully");
 
@@ -182,5 +186,8 @@ console.log(
         throw err; // Let bootstrap catch it
     }
 
-    return registry;
+    return  {
+    registry,
+    chainEngine
+};
 }

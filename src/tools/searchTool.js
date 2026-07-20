@@ -72,8 +72,10 @@ function buildFilter(type, searchTerm, input = {}) {
 
     switch (type) {
         case "CUSTOMER":
-        case "RENTAL":
-            return `contains(CustomerName,'${escapeOData(term)}')`;
+    return `contains(CustomerName,'${escapeOData(term)}')`;
+
+case "RENTAL":
+    return input.filterQuery || "";
 
         case "MODEL":
         case "REQUEST_LINES":
