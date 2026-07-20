@@ -199,12 +199,20 @@ null,
             previousResult;
 
         const customers =
-            customerSearch?.rows ||
-            customerSearch?.preview ||
-            customerSearch?.results?.value ||
-            customerSearch?.value ||
-            [];
+    previousResult?.data?.rows ||
+    previousResult?.data?.preview ||
+    previousResult?.rows ||
+    previousResult?.preview ||
+    [];
+console.log(
+    "CUSTOMERS ARRAY LENGTH:",
+    customers.length
+);
 
+console.log(
+    "FIRST CUSTOMER:",
+    JSON.stringify(customers[0], null, 2)
+);
         const customer = customers[0];
 
         if (!customer) {
