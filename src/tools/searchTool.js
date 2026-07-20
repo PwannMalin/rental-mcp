@@ -173,7 +173,11 @@ if (type === "EQUIPMENT") {
 
     console.log("Equipment header search term:", equipmentSearchTerm);
 }
+console.log("HEADERS BEING SENT:");
+console.log(JSON.stringify(headers, null, 2));
 
+console.log("PAYLOAD BEING SENT:");
+console.log(JSON.stringify(payload, null, 2));
 const flowResponse = await callPowerAutomate({
     url: process.env[config.env],
     payload,

@@ -17,7 +17,8 @@ export async function callPowerAutomate({
 
         console.log("Headers:");
         console.log(JSON.stringify(headers, null, 2));
-
+console.log("FINAL REQUEST HEADERS:");
+console.log(JSON.stringify(headers, null, 2));
         const response = await axios.post(
             url,
             payload,
