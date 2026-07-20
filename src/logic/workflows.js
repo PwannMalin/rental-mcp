@@ -198,14 +198,11 @@ null,
             previousResult?.data ||
             previousResult;
 
-        const customers =
-    previousResult?.data?.rows ||
-    previousResult?.data?.preview ||
-    previousResult?.rows ||
-    previousResult?.preview ||
-    [];
+   const customers =
+    previousResult?.data?.rows || [];
+
 console.log(
-    "CUSTOMERS ARRAY LENGTH:",
+    "CUSTOMER COUNT:",
     customers.length
 );
 
@@ -213,7 +210,8 @@ console.log(
     "FIRST CUSTOMER:",
     JSON.stringify(customers[0], null, 2)
 );
-        const customer = customers[0];
+
+const customer = customers[0];
 
         if (!customer) {
             console.warn("No customer found for rental request search.");
