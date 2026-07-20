@@ -141,16 +141,16 @@ app.get("/test/github/list-branches", async (req, res) => {
     }
 });
 
-app.get("/test/search/raymond", async (req, res) => {
-
+app.get("/test/search/all-equipment", async (req, res) => {
     const tool = toolSource["search_equipment"];
 
     const result = await tool.handler({
-        searchText: "Raymond"
+        filterQuery: ""
     });
 
     res.json(result);
 });
+``
 
 app.post("/chat", async (req, res) => {
 
