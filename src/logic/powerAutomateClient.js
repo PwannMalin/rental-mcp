@@ -2,7 +2,8 @@ import axios from "axios";
 
 export async function callPowerAutomate({
     url,
-    payload,
+    payload = {},
+    headers = {},
     flowName = "Power Automate Flow"
 }) {
     if (!url) {
@@ -10,25 +11,27 @@ export async function callPowerAutomate({
     }
 
     try {
-
         console.log(`Calling flow: ${flowName}`);
         console.log("Payload:");
         console.log(JSON.stringify(payload, null, 2));
+
+        console.log("Headers:");
+        console.log(JSON.stringify(headers, null, 2));
 
         const response = await axios.post(
             url,
             payload,
             {
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    ...headers
                 }
             }
         );
 
         console.log(`${flowName} succeeded`);
-        console.log(response.data);
-console.log("ACTUAL RESPONSE:");
-console.log(JSON.stringify(response.data, null, 2));
+        console.log(JSON.stringify(response.data, null, 2));
+
         return {
             flowName,
             status: response.status,
@@ -36,7 +39,6 @@ console.log(JSON.stringify(response.data, null, 2));
         };
 
     } catch (err) {
-
         console.error("FLOW ERROR");
         console.error("Flow:", flowName);
         console.error("Status:", err.response?.status);
