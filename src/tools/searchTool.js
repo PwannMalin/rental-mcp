@@ -162,11 +162,24 @@ parameters: {
         console.log("URL exists:", !!process.env[config.env]);
         console.log("URL starts with:", process.env[config.env]?.substring(0, 60));
 
-        const flowResponse = await callPowerAutomate({
-            url: process.env[config.env],
-            payload,
-            flowName: config.flowName
-        });
+        let headers = {};
+
+if (type === "EQUIPMENT") {
+    const equipmentSearchTerm = normalizeEquipmentSearchTerm(searchTerm);
+
+    headers = {
+        equipsearchtext: equipmentSearchTerm
+    };
+
+    console.log("Equipment header search term:", equipmentSearchTerm);
+}
+
+const flowResponse = await callPowerAutomate({
+    url: process.env[config.env],
+    payload,
+    headers,
+    flowName: config.flowName
+});
 
         /*
           Your logs show the Power Automate shape is:
