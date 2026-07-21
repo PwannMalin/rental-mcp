@@ -82,6 +82,10 @@ if (
                             console.log("Calling tool:", toolName);
 console.log("Arguments:", args);
                             result = await this.registry.execute(toolName, args, context);
+                        console.log(
+"TOOL RESULT:",
+JSON.stringify(result, null, 2)
+);
                         } catch (toolErr) {
                             console.error(`Tool ${toolName} failed:`, toolErr.message);
                             result = {
@@ -165,7 +169,11 @@ Rental search rules:
 - Rental request records store Customer IDs, not CustomerName.
 - To search rental requests by customer name, first call search.execute with type CUSTOMER.
 - Then use the customer CustomerNumber to call search.execute with type RENTAL and filterQuery Customer eq '<CustomerNumber>'.
- 
+- If the user provides a numeric customer number,
+do NOT search customers first.
+Search rentals directly using:
+Customer eq '<customer number>'
+
 GitHub code change rules:
 - When the user asks to fix code, improve code, update files, or create a pull request, use the GitHub tools.
 - Never modify the main branch directly.

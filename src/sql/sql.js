@@ -1,5 +1,5 @@
-const sql = require("mssql");
-require("dotenv").config();
+import sql from "mssql";
+import "dotenv/config";
 
 const config = {
     server: process.env.SQL_SERVER,
@@ -17,4 +17,4 @@ async function getPool() {
     return await sql.connect(config);
 }
 
-module.exports = { getPool };
+export { getPool };

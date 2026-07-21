@@ -1,24 +1,20 @@
-const { getPool } = require("./sql");
+import test from "node:test";
+import assert from "node:assert/strict";
 
-async function test() {
-    try {
-        const pool = await getPool();
+import { getPool } from "../sql/sql.js";
 
-        const result = await pool.request().query(`
-            SELECT GETDATE() AS CurrentTime
-        `);
+test("getPool returns a pool when SQL env is configured", async () => {
+    const hasRealSqlConfig = [process.env.SQL_SERVER, process.env.SQL_DATABASE, process.env.SQL_USER, process.env.SQL_PASSWORD]
+        .filter(Boolean)
+        .every(value => !/YOUR(server|database|user|password)/i.test(value));
 
-        console.log(result.recordset);
-
-        process.exit(0);
-
-    } catch (err) {
-
-        console.error("SQL ERROR:");
-        console.error(err);
-
-        process.exit(1);
+    if (!hasRealSqlConfig) {
+        test.skip();
+        return;
     }
-}
 
-test();
+    const pool = await getPool();
+
+    assert.ok(pool, "expected a SQL pool instance");
+    await pool.close();
+});
