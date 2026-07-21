@@ -205,7 +205,7 @@ app.get("/test/search/models", async (req, res) => {
 
 app.get("/test/rental-lookups", async (req, res) => {
 
-    const tool = toolSource["search_models"];
+    const tool = toolSource["search.execute"];
 
     const result = await tool.handler({
         searchText: ""
