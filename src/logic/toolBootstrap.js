@@ -100,14 +100,17 @@ console.log(
                     });
                 }
             },
-            {
+         {
     name: "rental_lookups",
     description: "Get rental lookup values.",
     tags: ["rental", "lookups"],
-    async handler() {
+    async handler(input = {}) {
+
+        console.log("LOOKUPS TOOL EXECUTING");
+
         return await search.handler({
             type: "LOOKUPS",
-            filterQuery: "1 eq 1"
+            filterQuery: input.filterQuery || ""
         });
     }
 },
