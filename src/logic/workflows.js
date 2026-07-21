@@ -179,7 +179,31 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 ""
         })
     },
+{
+    name: "findRequestLines",
+    tool: "search.execute",
+    mapInput: (input, previousResult) => {
 
+        const requests =
+            previousResult?.data?.rows ||
+            previousResult?.rows ||
+            [];
+
+        const request = requests[0];
+
+        if (!request?.RequestID) {
+            return {
+                type: "REQUEST_LINES",
+                filterQuery: "1 eq 0"
+            };
+        }
+
+        return {
+            type: "REQUEST_LINES",
+            filterQuery: `RequestID eq ${request.RequestID}`
+        };
+    }
+},
     {
         name: "findRentalRequests",
         tool: "search.execute",
