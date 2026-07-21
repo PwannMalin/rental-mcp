@@ -79,7 +79,8 @@ case "RENTAL":
 
         case "MODEL":
         case "REQUEST_LINES":
-            return `contains(EquipModel,'${escapeOData(term)}')`;
+    return input.filterQuery ||
+           `contains(EquipModel,'${escapeOData(term)}')`;
 
         case "EQUIPMENT":
             if (input.filterQuery) return input.filterQuery;
