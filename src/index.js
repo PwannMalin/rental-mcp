@@ -215,6 +215,19 @@ console.log("LOOKUPS TOOL CALLED");
 
 });
 
+app.get("/test/request-lines", async (req, res) => {
+
+    const tool = toolSource["search.execute"];
+
+    const result = await tool.handler({
+        type: "REQUEST_LINES",
+        filterQuery: `RequestID eq ${req.query.requestId || 3035}`
+    });
+
+    res.json(result);
+
+});
+
 app.get("/test/requests-by-customer", async (req, res) => {
 
     const tool = toolSource["search.execute"];
