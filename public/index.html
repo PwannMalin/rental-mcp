@@ -3,15 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rental MCP • AI Assistant</title>
+    <title>Rental MCP • Forklift Rentals</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
-        
-        :root {
-            --primary: 59 130 246;
-        }
         
         body {
             font-family: 'Inter', system_ui, sans-serif;
@@ -35,41 +31,16 @@
         }
 
         .user-bubble {
-            background: linear-gradient(135deg, rgb(59 130 246), rgb(29 78 216));
+            background: linear-gradient(135deg, rgb(234 88 12), rgb(194 65 12));
         }
 
         .ai-bubble {
             background: #334155;
         }
 
-        .scrollbar-thin::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-            background-color: #475569;
-            border-radius: 20px;
-        }
-
-        .typing-indicator {
-            display: flex;
-            gap: 4px;
-        }
-        
-        .typing-dot {
-            height: 5px;
-            width: 5px;
-            background: #94a3b8;
-            border-radius: 50%;
-            animation: typingBounce 1.2s infinite;
-        }
-        
-        .typing-dot:nth-child(2) { animation-delay: 150ms; }
-        .typing-dot:nth-child(3) { animation-delay: 300ms; }
-        
-        @keyframes typingBounce {
-            0%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-5px); }
+        button:focus-visible {
+            outline: 2px solid #fb923c;
+            outline-offset: 2px;
         }
     </style>
 </head>
@@ -79,28 +50,24 @@
         <!-- HEADER -->
         <div class="bg-zinc-950 border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-inner">
-                    R
+                <div class="w-11 h-11 bg-orange-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner">
+                    🏗️
                 </div>
                 <div>
                     <h1 class="title-font text-2xl font-semibold tracking-tight">Rental MCP</h1>
-                    <p class="text-emerald-400 text-sm flex items-center gap-1.5">
-                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                        AI Assistant Online
+                    <p class="text-orange-400 text-sm flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
+                        Forklift & Equipment Rentals
                     </p>
                 </div>
             </div>
             
-            <div class="flex items-center gap-6 text-zinc-400">
-                <button onclick="clearChat()" 
-                        class="hover:text-white transition-colors flex items-center gap-2 text-sm">
-                    <i class="fas fa-trash"></i>
-                    <span>Clear</span>
-                </button>
-                <div class="w-8 h-8 bg-zinc-800 rounded-2xl flex items-center justify-center cursor-pointer hover:bg-zinc-700 transition-colors">
-                    <i class="fas fa-ellipsis-v"></i>
-                </div>
-            </div>
+            <button onclick="clearChat()" 
+                    aria-label="Clear conversation"
+                    class="hover:text-white transition-colors flex items-center gap-2 text-sm px-4 py-2 rounded-2xl hover:bg-zinc-800">
+                <i class="fas fa-trash"></i>
+                <span class="hidden sm:inline">Clear Chat</span>
+            </button>
         </div>
 
         <!-- CHAT AREA -->
@@ -109,13 +76,13 @@
             
             <!-- Welcome Message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-white text-xl shadow-md">
-                    ✨
+                <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                    🏗️
                 </div>
                 <div class="max-w-[75%]">
-                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4 text-base leading-relaxed">
-                        Hello! I'm Rental MCP, your intelligent real estate assistant.<br>
-                        How can I help you today? Ask me about properties, market trends, or rental strategies.
+                    <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
+                        Hello! I'm Rental MCP — your expert for <strong>forklift and material handling equipment rentals</strong>.<br><br>
+                        Need a forklift for a short-term project, long-term lease, or a demo? I can help with availability, pricing, specs, and recommendations.
                     </div>
                     <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                 </div>
@@ -126,28 +93,31 @@
         <!-- INPUT AREA -->
         <div class="bg-zinc-900 border-t border-zinc-800 p-6">
             <div class="relative">
-                <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 transition-all">
-                    <button class="px-6 text-zinc-400 hover:text-white transition-colors">
-                        <i class="fas fa-paperclip"></i>
+                <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/30 transition-all">
+                    
+                    <!-- Attachment Button -->
+                    <button onclick="attachFile()" 
+                            aria-label="Attach file or photo"
+                            class="px-6 py-5 text-zinc-400 hover:text-orange-400 transition-colors">
+                        <i class="fas fa-paperclip text-xl"></i>
                     </button>
                     
                     <input 
                         id="message"
                         type="text"
-                        placeholder="Ask Rental MCP anything about rentals..."
+                        placeholder="Need a forklift? Ask me anything..."
                         class="flex-1 bg-transparent py-5 px-4 outline-none text-base placeholder-zinc-500"
                         onkeypress="if(event.key === 'Enter') sendMessage()"
+                        aria-label="Type your message"
                     />
                     
+                    <!-- Send Button -->
                     <button onclick="sendMessage()" 
                             id="send"
-                            class="w-12 h-12 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-2xl flex items-center justify-center text-white transition-all mr-2 shadow-lg">
+                            aria-label="Send message"
+                            class="w-12 h-12 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 rounded-2xl flex items-center justify-center text-white transition-all mr-2 shadow-lg">
                         <i class="fas fa-paper-plane"></i>
                     </button>
-                </div>
-                
-                <div class="text-center text-[10px] text-zinc-500 mt-3 flex items-center justify-center gap-4">
-                    <span>Rental MCP can make mistakes. Consider checking important info.</span>
                 </div>
             </div>
         </div>
@@ -171,8 +141,8 @@
                 `;
             } else {
                 messageDiv.innerHTML = `
-                    <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-white text-xl shadow-md">
-                        ✨
+                    <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                        🏗️
                     </div>
                     <div class="max-w-[75%]">
                         <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
@@ -189,15 +159,15 @@
         
         function showTypingIndicator() {
             const typingHTML = `
-                <div class="flex gap-4 typing-indicator" id="typing">
-                    <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-white text-xl shadow-md">
-                        ✨
+                <div class="flex gap-4" id="typing">
+                    <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                        🏗️
                     </div>
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4">
-                        <div class="typing-indicator">
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
+                        <div class="flex gap-1">
+                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
+                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-150"></div>
+                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-300"></div>
                         </div>
                     </div>
                 </div>
@@ -211,7 +181,7 @@
             if (typing) typing.remove();
         }
         
-        async function sendMessage() {
+        function sendMessage() {
             const input = document.getElementById('message');
             const text = input.value.trim();
             
@@ -220,38 +190,40 @@
             addMessage(text, true);
             input.value = '';
             
-            // Simulate AI thinking
             setTimeout(() => {
                 showTypingIndicator();
                 
                 setTimeout(() => {
                     removeTypingIndicator();
                     
-                    // Sample AI responses
                     const responses = [
-                        "That's a great question! Based on current market data, average rental yields in that area are around 6.2%.",
-                        "I can help with that. Would you like me to analyze comparable properties in the neighborhood?",
-                        "Here's what I found: The property at 142 Maple Ave is currently listed at $2,450/month. Want more details?",
-                        "Great choice! That location has seen 8% year-over-year rental growth."
+                        "We have several 5,000 lb capacity electric forklifts available for immediate rental. Would you like short-term (daily/weekly) or long-term options?",
+                        "Great choice! Our Toyota and Crown forklifts are very popular. What's the lift height and application you're looking for?",
+                        "For a demo unit, I recommend our 2024 Caterpillar EP series. I can send you specs and pricing right away.",
+                        "Current promo: Rent any forklift for 30 days and get the first 5 days free. Want me to check availability in your area?"
                     ];
                     
                     const randomResponse = responses[Math.floor(Math.random() * responses.length)];
                     addMessage(randomResponse, false);
-                }, 1200);
-            }, 300);
+                }, 1100);
+            }, 400);
+        }
+        
+        function attachFile() {
+            alert("📎 File attachment feature coming soon!\n\nYou can upload photos of equipment or site requirements.");
         }
         
         function clearChat() {
             if (confirm("Clear the entire conversation?")) {
                 chat.innerHTML = `
                     <div class="flex gap-4 message-bubble">
-                        <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-white text-xl shadow-md">
-                            ✨
+                        <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                            🏗️
                         </div>
                         <div class="max-w-[75%]">
-                            <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4 text-base leading-relaxed">
-                                Hello! I'm Rental MCP, your intelligent real estate assistant.<br>
-                                How can I help you today? Ask me about properties, market trends, or rental strategies.
+                            <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
+                                Hello! I'm Rental MCP — your expert for <strong>forklift and material handling equipment rentals</strong>.<br><br>
+                                Need a forklift for a short-term project, long-term lease, or a demo? I can help with availability, pricing, specs, and recommendations.
                             </div>
                             <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                         </div>
@@ -260,10 +232,6 @@
             }
         }
         
-        // Tailwind script already loaded via CDN
-        console.log('%cRental MCP AI Chat Ready 🚀', 'color:#3b82f6; font-family:monospace; font-size:13px');
-        
-        // Focus input on load
         window.onload = () => {
             document.getElementById('message').focus();
         };
