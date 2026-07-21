@@ -10,7 +10,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
         
         body {
-            font-family: 'Inter', system_ui, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
         }
 
         .chat-container {
@@ -173,39 +173,69 @@
             if (el) el.remove();
         }
         
-        function sendMessage() {
-            const input = document.getElementById('message');
-            const text = input.value.trim();
-            if (!text) return;
-            
-            addMessage(text, true);
-            input.value = '';
-            
-            setTimeout(() => {
-                showTypingIndicator();
-                setTimeout(() => {
-                    removeTyping();
-                    const replies = [
-                        "✅ Checked inventory. We have 3x 5,000 lb Raymond electric forklifts available in Houston. Would you like me to generate a quote?",
-                        "Quote request logged. Expected delivery: 2 business days. Anything else to add (lift height, attachments, etc.)?",
-                        "Current status: 4 reach trucks and 7 counterbalance units in stock across DFW. Want me to pull detailed availability?",
-                        "Quote #RNT-7842 created and sent to your email. Let me know if you need modifications."
-                    ];
-                    addMessage(replies[Math.floor(Math.random() * replies.length)], false);
-                }, 900);
-            }, 300);
-        }
+        async function sendMessage() {
+
+    const input =
+        document.getElementById("message");
+
+    const text =
+        input.value.trim();
+
+    if (!text) return;
+
+    addMessage(text, true);
+
+    input.value = "";
+
+    showTypingIndicator();
+
+    try {
+
+        const response = await fetch(
+            "/chat",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: text
+                })
+            }
+        );
+
+        const data =
+            await response.json();
+
+        removeTyping();
+
+        addMessage(
+            data.answer ||
+            "No response received.",
+            false
+        );
+
+    } catch (err) {
+
+        removeTyping();
+
+        addMessage(
+            `❌ Error: ${err.message}`,
+            false
+        );
+
+        console.error(err);
+    }
+}
         
         function quickAction(text) {
-            addMessage(text, true);
-            setTimeout(() => {
-                showTypingIndicator();
-                setTimeout(() => {
-                    removeTyping();
-                    addMessage("I've noted your request. Processing availability and quote details now...", false);
-                }, 800);
-            }, 200);
-        }
+
+    document.getElementById(
+        "message"
+    ).value = text;
+
+    sendMessage();
+}
         
         function attachFile() {
             alert("📎 Attachment uploaded (Internal System)\n\nYou can attach PO, site photos, or spec sheets.");
