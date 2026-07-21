@@ -169,12 +169,14 @@ const normalizedSearchTerm =
             };
         }
 
-     const payload = {
+    const payload = {
     filterQuery: buildFilter(
         type,
         normalizedSearchTerm,
         input
-    )
+    ),
+    topCount: input.topCount,
+    orderBy: input.orderBy
 };
 
         if (type === "CUSTOMER_INFO") {
