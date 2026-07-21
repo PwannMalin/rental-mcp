@@ -74,6 +74,9 @@ function buildFilter(type, searchTerm, input = {}) {
         case "CUSTOMER":
     return `contains(CustomerName,'${escapeOData(term)}')`;
 
+case "LOOKUPS":
+    return input.filterQuery || "";
+    
 case "RENTAL":
     return input.filterQuery || "";
 
