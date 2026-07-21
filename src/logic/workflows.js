@@ -196,7 +196,12 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
 
             console.log("CUSTOMER COUNT:", customers.length);
 
-            const customer = customers[0];
+            const customer =
+    customers.find(
+        c =>
+            c.Branch?.trim().toUpperCase() === "ADDISON"
+    ) ||
+    customers[0];
 
             console.log(
                 "FIRST CUSTOMER:",
