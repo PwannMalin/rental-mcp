@@ -203,6 +203,19 @@ app.get("/test/search/models", async (req, res) => {
 
 });
 
+app.get("/test/requests-by-customer", async (req, res) => {
+
+    const tool = toolSource["search.execute"];
+
+    const result = await tool.handler({
+        type: "RENTAL",
+        filterQuery: `Customer eq '${req.query.customer}'`
+    });
+
+    res.json(result);
+
+});
+
 app.post("/chat", async (req, res) => {
 
     try {
