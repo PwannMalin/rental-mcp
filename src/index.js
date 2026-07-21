@@ -216,22 +216,13 @@ app.get("/test/rental-lookups", async (req, res) => {
 });
 
 app.get("/test/rental-lookups", async (req, res) => {
-    try {
-        const tool = toolSource["search.execute"];
 
-        const result = await tool.handler({
-            type: "LOOKUPS"
-        });
+    const tool = toolSource["rental_lookups"];
+console.log("LOOKUPS TOOL CALLED");
+    const result = await tool.handler({});
 
-        res.json(result);
-    } catch (err) {
-        console.error("❌ rental lookups test failed:", err);
+    res.json(result);
 
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
-    }
 });
 
 app.get("/test/requests-by-customer", async (req, res) => {
