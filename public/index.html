@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malin Rental MCP • Forklift & Equipment</title>
+    <title>Malin Internal Rental MCP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
         
         body {
             font-family: 'Inter', system_ui, sans-serif;
-        }
-        
-        .title-font {
-            font-family: 'Space Grotesk', sans-serif;
         }
 
         .chat-container {
@@ -26,12 +22,12 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .user-bubble {
-            background: linear-gradient(135deg, #1e40af, #3b82f6);
+            background: linear-gradient(135deg, #1e40af, #2563eb);
         }
 
         .ai-bubble {
@@ -39,79 +35,89 @@
         }
     </style>
 </head>
-<body class="bg-zinc-950 text-white min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-4xl h-screen flex flex-col bg-zinc-900 shadow-2xl overflow-hidden rounded-3xl border border-zinc-800">
+<body class="bg-zinc-950 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl h-screen flex flex-col bg-zinc-900 shadow-2xl overflow-hidden rounded-3xl border border-zinc-700">
         
         <!-- HEADER -->
-        <div class="bg-zinc-950 border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
+        <div class="bg-zinc-950 border-b border-zinc-700 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-11 h-11 bg-blue-700 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner font-bold">
+                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex items-center justify-center text-white font-bold text-2xl">
                     M
                 </div>
                 <div>
-                    <h1 class="title-font text-2xl font-semibold tracking-tight">Malin Rental MCP</h1>
-                    <p class="text-blue-400 text-sm flex items-center gap-1.5">
+                    <h1 class="text-xl font-semibold">Malin Internal Rental MCP</h1>
+                    <p class="text-emerald-400 text-xs flex items-center gap-1.5">
                         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                        Powered by Malin USA • Raymond Dealer
+                        Live • Connected to Rental Inventory
                     </p>
                 </div>
             </div>
             
-            <button onclick="clearChat()" 
-                    aria-label="Clear conversation"
-                    class="hover:text-white transition-colors flex items-center gap-2 text-sm px-4 py-2 rounded-2xl hover:bg-zinc-800">
-                <i class="fas fa-trash"></i>
-                <span class="hidden sm:inline">Clear</span>
-            </button>
+            <div class="flex items-center gap-3">
+                <button onclick="clearChat()" 
+                        aria-label="Clear chat"
+                        class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-zinc-800 transition-colors text-sm">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
         </div>
 
         <!-- CHAT AREA -->
-        <div id="chat" 
-             class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin">
+        <div id="chat" class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin">
             
-            <!-- Welcome Message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">
                     🏗️
                 </div>
-                <div class="max-w-[75%]">
-                    <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
-                        Hello! I'm Malin Rental MCP — your AI assistant for <strong>forklift and material handling equipment rentals</strong> in Texas & Louisiana.<br><br>
-                        Whether you need short-term, long-term, or demo equipment, I can help with availability, recommendations, and fast quotes.
+                <div class="max-w-[80%]">
+                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
+                        Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
+                        Use me to check rental availability, request quotes, or get equipment recommendations for coordinators and internal teams.
                     </div>
-                    <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
+                    <p class="text-xs text-zinc-500 mt-1.5 pl-2">just now</p>
                 </div>
             </div>
 
         </div>
 
+        <!-- QUICK ACTIONS -->
+        <div class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 flex gap-2 flex-wrap">
+            <button onclick="quickAction('Check availability for 5000 lb electric forklift')" 
+                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
+                Check Availability
+            </button>
+            <button onclick="quickAction('Request quote for 30-day rental')" 
+                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
+                Request Quote
+            </button>
+            <button onclick="quickAction('Show current Raymond reach truck inventory')" 
+                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
+                Raymond Inventory
+            </button>
+        </div>
+
         <!-- INPUT AREA -->
-        <div class="bg-zinc-900 border-t border-zinc-800 p-6">
-            <div class="relative">
-                <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 transition-all">
-                    
-                    <button onclick="attachFile()" 
-                            aria-label="Attach file or photo"
-                            class="px-6 py-5 text-zinc-400 hover:text-blue-400 transition-colors">
-                        <i class="fas fa-paperclip text-xl"></i>
-                    </button>
-                    
-                    <input 
-                        id="message"
-                        type="text"
-                        placeholder="What forklift do you need? (capacity, duration, location...)"
-                        class="flex-1 bg-transparent py-5 px-4 outline-none text-base placeholder-zinc-500"
-                        onkeypress="if(event.key === 'Enter') sendMessage()"
-                        aria-label="Type your message"
-                    />
-                    
-                    <button onclick="sendMessage()" 
-                            id="send"
-                            aria-label="Send message"
-                            class="w-12 h-12 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-2xl flex items-center justify-center text-white transition-all mr-2 shadow-lg">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
+        <div class="bg-zinc-900 border-t border-zinc-700 p-5">
+            <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 transition-all">
+                <button onclick="attachFile()" 
+                        aria-label="Attach file"
+                        class="pl-6 pr-4 py-5 text-zinc-400 hover:text-blue-400">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                
+                <input 
+                    id="message"
+                    type="text"
+                    placeholder="E.g. Need quote for 2x 6000lb electric forklifts for Houston site, 45 days..."
+                    class="flex-1 bg-transparent py-5 px-3 outline-none text-sm placeholder-zinc-500"
+                    onkeypress="if(event.key === 'Enter') sendMessage()"
+                />
+                
+                <button onclick="sendMessage()" 
+                        aria-label="Send"
+                        class="w-11 h-11 bg-blue-600 hover:bg-blue-500 rounded-3xl flex items-center justify-center mr-2 text-white">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -120,43 +126,36 @@
         const chat = document.getElementById('chat');
         
         function addMessage(text, isUser) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `flex ${isUser ? 'justify-end' : 'gap-4'} message-bubble`;
+            const div = document.createElement('div');
+            div.className = `flex ${isUser ? 'justify-end' : 'gap-4'} message-bubble`;
             
             if (isUser) {
-                messageDiv.innerHTML = `
+                div.innerHTML = `
                     <div class="max-w-[75%]">
-                        <div class="user-bubble text-white rounded-3xl rounded-tr-none px-6 py-4 text-base leading-relaxed">
+                        <div class="user-bubble rounded-3xl rounded-tr-none px-5 py-3.5 text-sm">
                             ${text}
                         </div>
-                        <p class="text-xs text-zinc-500 mt-2 text-right pr-2">just now</p>
                     </div>
                 `;
             } else {
-                messageDiv.innerHTML = `
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
-                        🏗️
-                    </div>
+                div.innerHTML = `
+                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
                     <div class="max-w-[75%]">
-                        <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
+                        <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm">
                             ${text}
                         </div>
-                        <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                     </div>
                 `;
             }
-            
-            chat.appendChild(messageDiv);
+            chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
         }
         
         function showTypingIndicator() {
-            const typingHTML = `
+            const html = `
                 <div class="flex gap-4" id="typing">
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
-                        🏗️
-                    </div>
-                    <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4">
+                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
+                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
                         <div class="flex gap-1">
                             <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
                             <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-150"></div>
@@ -165,19 +164,18 @@
                     </div>
                 </div>
             `;
-            chat.insertAdjacentHTML('beforeend', typingHTML);
+            chat.insertAdjacentHTML('beforeend', html);
             chat.scrollTop = chat.scrollHeight;
         }
         
-        function removeTypingIndicator() {
-            const typing = document.getElementById('typing');
-            if (typing) typing.remove();
+        function removeTyping() {
+            const el = document.getElementById('typing');
+            if (el) el.remove();
         }
         
         function sendMessage() {
             const input = document.getElementById('message');
             const text = input.value.trim();
-            
             if (!text) return;
             
             addMessage(text, true);
@@ -185,49 +183,52 @@
             
             setTimeout(() => {
                 showTypingIndicator();
-                
                 setTimeout(() => {
-                    removeTypingIndicator();
-                    
-                    const responses = [
-                        "We have a strong inventory of Raymond electric forklifts ready for short or long-term rental. What's the capacity and application you need?",
-                        "Perfect timing! We can deliver same-week for most requests across Texas & Louisiana. Would you prefer electric or IC (propane) equipment?",
-                        "As a Raymond Solutions & Support Center, all our rental units are professionally maintained. I recommend our reach trucks for high-density warehousing — want specs?",
-                        "Great question. Our current promotions include flexible monthly rentals with full service included. Let me know your location and I'll check availability."
+                    removeTyping();
+                    const replies = [
+                        "✅ Checked inventory. We have 3x 5,000 lb Raymond electric forklifts available in Houston. Would you like me to generate a quote?",
+                        "Quote request logged. Expected delivery: 2 business days. Anything else to add (lift height, attachments, etc.)?",
+                        "Current status: 4 reach trucks and 7 counterbalance units in stock across DFW. Want me to pull detailed availability?",
+                        "Quote #RNT-7842 created and sent to your email. Let me know if you need modifications."
                     ];
-                    
-                    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-                    addMessage(randomResponse, false);
-                }, 1100);
-            }, 400);
+                    addMessage(replies[Math.floor(Math.random() * replies.length)], false);
+                }, 900);
+            }, 300);
+        }
+        
+        function quickAction(text) {
+            addMessage(text, true);
+            setTimeout(() => {
+                showTypingIndicator();
+                setTimeout(() => {
+                    removeTyping();
+                    addMessage("I've noted your request. Processing availability and quote details now...", false);
+                }, 800);
+            }, 200);
         }
         
         function attachFile() {
-            alert("📎 You can attach photos of your facility, equipment needs, or site layout.\n\nThis feature is coming soon!");
+            alert("📎 Attachment uploaded (Internal System)\n\nYou can attach PO, site photos, or spec sheets.");
         }
         
         function clearChat() {
-            if (confirm("Clear the conversation?")) {
+            if (confirm("Clear this chat session?")) {
                 chat.innerHTML = `
                     <div class="flex gap-4 message-bubble">
-                        <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
-                            🏗️
-                        </div>
-                        <div class="max-w-[75%]">
-                            <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
-                                Hello! I'm Malin Rental MCP — your AI assistant for <strong>forklift and material handling equipment rentals</strong> in Texas & Louisiana.<br><br>
-                                Whether you need short-term, long-term, or demo equipment, I can help with availability, recommendations, and fast quotes.
+                        <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
+                        <div class="max-w-[80%]">
+                            <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
+                                Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
+                                Use me to check rental availability, request quotes, or get equipment recommendations for coordinators and internal teams.
                             </div>
-                            <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                         </div>
                     </div>
                 `;
             }
         }
         
-        window.onload = () => {
-            document.getElementById('message').focus();
-        };
+        // Initialize
+        window.onload = () => document.getElementById('message').focus();
     </script>
 </body>
 </html>
