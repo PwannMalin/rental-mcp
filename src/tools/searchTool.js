@@ -155,7 +155,11 @@ const normalizedSearchTerm =
         : searchTerm;
 
 
-        if (!searchTerm && !input.filterQuery) {
+       if (
+    type !== "LOOKUPS" &&
+    !searchTerm &&
+    !input.filterQuery
+) {
             return {
                 success: false,
                 error: "SearchTerm or filterQuery is required."

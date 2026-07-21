@@ -203,6 +203,18 @@ app.get("/test/search/models", async (req, res) => {
 
 });
 
+app.get("/test/rental-lookups", async (req, res) => {
+
+    const tool = toolSource["search_models"];
+
+    const result = await tool.handler({
+        searchText: ""
+    });
+
+    res.json(result);
+
+});
+
 app.get("/test/requests-by-customer", async (req, res) => {
 
     const tool = toolSource["search.execute"];
