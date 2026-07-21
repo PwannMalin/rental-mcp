@@ -166,6 +166,10 @@ export function registerWorkflows(chainEngine) {
 
     // =================================================================
 chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
+
+    // =========================================================
+    // STEP 1: Find Customer
+    // =========================================================
     {
         name: "findCustomer",
         tool: "search.execute",
@@ -179,62 +183,40 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 ""
         })
     },
-{
-    name: "findRequestLines",
-    tool: "search.execute",
-    mapInput: (input, previousResult) => {
 
-        const requests =
-            previousResult?.data?.rows ||
-            previousResult?.rows ||
-            [];
-
-        const request = requests[0];
-
-        if (!request?.RequestID) {
-            return {
-                type: "REQUEST_LINES",
-                filterQuery: "1 eq 0"
-            };
-        }
-
-        return {
-            type: "REQUEST_LINES",
-            filterQuery: `RequestID eq ${request.RequestID}`
-        };
-    }
-},
+    // =========================================================
+    // STEP 2: Find Rental Requests
+    // =========================================================
     {
         name: "findRentalRequests",
         tool: "search.execute",
         mapInput: (input, previousResult) => {
+
             console.log("PREVIOUS RESULT FROM CUSTOMER SEARCH:");
             console.log(JSON.stringify(previousResult, null, 2));
 
             const customers =
-                previousResult?.data?.rows ||
-                previousResult?.data?.preview ||
                 previousResult?.rows ||
                 previousResult?.preview ||
+                previousResult?.data?.rows ||
+                previousResult?.data?.preview ||
                 [];
 
             console.log("CUSTOMER COUNT:", customers.length);
 
             const customer =
-    customers.find(
-        c =>
-            c.Branch?.trim().toUpperCase() === "ADDISON"
-    ) ||
-    customers[0];
+                customers.find(
+                    c =>
+                        c.Branch?.trim().toUpperCase() === "ADDISON"
+                ) ||
+                customers[0];
 
             console.log(
-                "FIRST CUSTOMER:",
+                "SELECTED CUSTOMER:",
                 JSON.stringify(customer, null, 2)
             );
 
             if (!customer) {
-                console.warn("No customer found for rental request search.");
-
                 return {
                     type: "RENTAL",
                     filterQuery: "1 eq 0"
@@ -251,38 +233,95 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 ""
             ).trim();
 
-            console.log("CUSTOMER NUMBER:", customerNumber);
+            console.log(
+                "CUSTOMER NUMBER:",
+                customerNumber
+            );
 
             if (!customerNumber) {
-                console.warn(
-                    "Customer found but no customer number field was available:",
-                    customer
-                );
-
                 return {
                     type: "RENTAL",
                     filterQuery: "1 eq 0"
                 };
             }
 
-            const rentalFilter = `Customer eq '${customerNumber}'`;
+            const filterQuery =
+                `Customer eq '${customerNumber}'`;
 
-            console.log("Customer found:", {
-                name:
-                    customer.CustomerName ||
-                    customer.Name ||
-                    customer.name,
-                customerNumber
-            });
-
-            console.log("Rental request filter:", rentalFilter);
+            console.log(
+                "RENTAL FILTER:",
+                filterQuery
+            );
 
             return {
                 type: "RENTAL",
-                filterQuery: rentalFilter
+                filterQuery
+            };
+        }
+    },
+
+    // =========================================================
+    // STEP 3: Find Request Lines
+    // =========================================================
+    {
+        name: "findRequestLines",
+        tool: "search.execute",
+        mapInput: (input, previousResult) => {
+
+            console.log("RENTAL REQUEST RESULT:");
+            console.log(
+                JSON.stringify(
+                    previousResult,
+                    null,
+                    2
+                )
+            );
+
+            const requests =
+                previousResult?.rows ||
+                previousResult?.preview ||
+                previousResult?.data?.rows ||
+                previousResult?.data?.preview ||
+                [];
+
+            console.log(
+                "REQUEST COUNT:",
+                requests.length
+            );
+
+            const request = requests[0];
+
+            console.log(
+                "SELECTED REQUEST:",
+                JSON.stringify(
+                    request,
+                    null,
+                    2
+                )
+            );
+
+            if (!request?.RequestID) {
+                return {
+                    type: "REQUEST_LINES",
+                    filterQuery: "1 eq 0"
+                };
+            }
+
+            const filterQuery =
+                `RequestID eq ${request.RequestID}`;
+
+            console.log(
+                "REQUEST LINE FILTER:",
+                filterQuery
+            );
+
+            return {
+                type: "REQUEST_LINES",
+                filterQuery
             };
         }
     }
+
 ]);
     chainEngine.registerWorkflow("emailQuoteWorkflow", [
         {
