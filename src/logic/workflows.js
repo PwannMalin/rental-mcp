@@ -277,6 +277,11 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 )
             );
 
+             console.log(
+    "REQUEST LINE WORKFLOW OUTPUT:",
+    JSON.stringify(previousResult, null, 2)
+);
+
             const requests =
                 previousResult?.rows ||
                 previousResult?.preview ||
@@ -319,6 +324,8 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 type: "REQUEST_LINES",
                 filterQuery
             };
+
+           
         }
     }
 
