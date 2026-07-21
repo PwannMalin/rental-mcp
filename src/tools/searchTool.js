@@ -222,7 +222,24 @@ if (type === "LOOKUPS") {
         */
 
         const responseBody = flowResponse?.data || {};
+if (
+    type === "LOOKUPS" &&
+    Array.isArray(responseBody)
+) {
+    console.log(
+        "LOOKUPS TYPES:",
+        responseBody.map(x => x.type)
+    );
 
+    return {
+        success: true,
+        searchType: type,
+        count: responseBody.length,
+        rows: responseBody,
+        preview: responseBody,
+        answer: `Found ${responseBody.length} lookup groups.`
+    };
+}
 let rows = [];
 
 if (Array.isArray(responseBody)) {
