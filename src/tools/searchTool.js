@@ -226,18 +226,19 @@ if (
     type === "LOOKUPS" &&
     Array.isArray(responseBody)
 ) {
-    console.log(
-        "LOOKUPS TYPES:",
-        responseBody.map(x => x.type)
-    );
+    const lookupGroups = {};
+
+    responseBody.forEach(item => {
+        lookupGroups[item.type] =
+            item.load?.value || [];
+    });
 
     return {
         success: true,
         searchType: type,
-        count: responseBody.length,
-        rows: responseBody,
-        preview: responseBody,
-        answer: `Found ${responseBody.length} lookup groups.`
+        lookupGroups,
+        count: Object.keys(lookupGroups).length,
+        rows: lookupGroups
     };
 }
 let rows = [];
