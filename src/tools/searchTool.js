@@ -218,13 +218,19 @@ const flowResponse = await callPowerAutomate({
 
         const responseBody = flowResponse?.data || {};
 
-const rows =
-    responseBody?.value ||
-    responseBody?.results?.value ||
-    responseBody?.data?.value ||
-    responseBody?.data?.results?.value ||
-    flowResponse?.value ||
-    [];
+let rows = [];
+
+if (Array.isArray(responseBody)) {
+    rows = responseBody;
+} else if (Array.isArray(responseBody?.value)) {
+    rows = responseBody.value;
+} else if (Array.isArray(responseBody?.results?.value)) {
+    rows = responseBody.results.value;
+} else if (Array.isArray(responseBody?.data?.value)) {
+    rows = responseBody.data.value;
+} else if (Array.isArray(flowResponse?.value)) {
+    rows = flowResponse.value;
+}
 
 const safeRows = Array.isArray(rows) ? rows : [];
 
