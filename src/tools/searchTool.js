@@ -205,7 +205,12 @@ const flowResponse = await callPowerAutomate({
     headers,
     flowName: config.flowName
 });
-
+if (type === "LOOKUPS") {
+    console.log(
+        "RAW LOOKUPS RESPONSE:",
+        JSON.stringify(flowResponse, null, 2)
+    );
+}
         /*
           Your logs show the Power Automate shape is:
           {
