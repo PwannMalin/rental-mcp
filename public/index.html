@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rental MCP • Forklift Rentals</title>
+    <title>Malin Rental MCP • Forklift & Equipment</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
@@ -31,16 +31,11 @@
         }
 
         .user-bubble {
-            background: linear-gradient(135deg, rgb(234 88 12), rgb(194 65 12));
+            background: linear-gradient(135deg, #1e40af, #3b82f6);
         }
 
         .ai-bubble {
-            background: #334155;
-        }
-
-        button:focus-visible {
-            outline: 2px solid #fb923c;
-            outline-offset: 2px;
+            background: #1f2937;
         }
     </style>
 </head>
@@ -50,14 +45,14 @@
         <!-- HEADER -->
         <div class="bg-zinc-950 border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-11 h-11 bg-orange-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner">
-                    🏗️
+                <div class="w-11 h-11 bg-blue-700 rounded-2xl flex items-center justify-center text-white text-3xl shadow-inner font-bold">
+                    M
                 </div>
                 <div>
-                    <h1 class="title-font text-2xl font-semibold tracking-tight">Rental MCP</h1>
-                    <p class="text-orange-400 text-sm flex items-center gap-1.5">
-                        <span class="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
-                        Forklift & Equipment Rentals
+                    <h1 class="title-font text-2xl font-semibold tracking-tight">Malin Rental MCP</h1>
+                    <p class="text-blue-400 text-sm flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                        Powered by Malin USA • Raymond Dealer
                     </p>
                 </div>
             </div>
@@ -66,7 +61,7 @@
                     aria-label="Clear conversation"
                     class="hover:text-white transition-colors flex items-center gap-2 text-sm px-4 py-2 rounded-2xl hover:bg-zinc-800">
                 <i class="fas fa-trash"></i>
-                <span class="hidden sm:inline">Clear Chat</span>
+                <span class="hidden sm:inline">Clear</span>
             </button>
         </div>
 
@@ -76,13 +71,13 @@
             
             <!-- Welcome Message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
                     🏗️
                 </div>
                 <div class="max-w-[75%]">
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
-                        Hello! I'm Rental MCP — your expert for <strong>forklift and material handling equipment rentals</strong>.<br><br>
-                        Need a forklift for a short-term project, long-term lease, or a demo? I can help with availability, pricing, specs, and recommendations.
+                        Hello! I'm Malin Rental MCP — your AI assistant for <strong>forklift and material handling equipment rentals</strong> in Texas & Louisiana.<br><br>
+                        Whether you need short-term, long-term, or demo equipment, I can help with availability, recommendations, and fast quotes.
                     </div>
                     <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                 </div>
@@ -93,29 +88,27 @@
         <!-- INPUT AREA -->
         <div class="bg-zinc-900 border-t border-zinc-800 p-6">
             <div class="relative">
-                <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/30 transition-all">
+                <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 transition-all">
                     
-                    <!-- Attachment Button -->
                     <button onclick="attachFile()" 
                             aria-label="Attach file or photo"
-                            class="px-6 py-5 text-zinc-400 hover:text-orange-400 transition-colors">
+                            class="px-6 py-5 text-zinc-400 hover:text-blue-400 transition-colors">
                         <i class="fas fa-paperclip text-xl"></i>
                     </button>
                     
                     <input 
                         id="message"
                         type="text"
-                        placeholder="Need a forklift? Ask me anything..."
+                        placeholder="What forklift do you need? (capacity, duration, location...)"
                         class="flex-1 bg-transparent py-5 px-4 outline-none text-base placeholder-zinc-500"
                         onkeypress="if(event.key === 'Enter') sendMessage()"
                         aria-label="Type your message"
                     />
                     
-                    <!-- Send Button -->
                     <button onclick="sendMessage()" 
                             id="send"
                             aria-label="Send message"
-                            class="w-12 h-12 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 rounded-2xl flex items-center justify-center text-white transition-all mr-2 shadow-lg">
+                            class="w-12 h-12 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-2xl flex items-center justify-center text-white transition-all mr-2 shadow-lg">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -141,7 +134,7 @@
                 `;
             } else {
                 messageDiv.innerHTML = `
-                    <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
                         🏗️
                     </div>
                     <div class="max-w-[75%]">
@@ -160,7 +153,7 @@
         function showTypingIndicator() {
             const typingHTML = `
                 <div class="flex gap-4" id="typing">
-                    <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
                         🏗️
                     </div>
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4">
@@ -197,10 +190,10 @@
                     removeTypingIndicator();
                     
                     const responses = [
-                        "We have several 5,000 lb capacity electric forklifts available for immediate rental. Would you like short-term (daily/weekly) or long-term options?",
-                        "Great choice! Our Toyota and Crown forklifts are very popular. What's the lift height and application you're looking for?",
-                        "For a demo unit, I recommend our 2024 Caterpillar EP series. I can send you specs and pricing right away.",
-                        "Current promo: Rent any forklift for 30 days and get the first 5 days free. Want me to check availability in your area?"
+                        "We have a strong inventory of Raymond electric forklifts ready for short or long-term rental. What's the capacity and application you need?",
+                        "Perfect timing! We can deliver same-week for most requests across Texas & Louisiana. Would you prefer electric or IC (propane) equipment?",
+                        "As a Raymond Solutions & Support Center, all our rental units are professionally maintained. I recommend our reach trucks for high-density warehousing — want specs?",
+                        "Great question. Our current promotions include flexible monthly rentals with full service included. Let me know your location and I'll check availability."
                     ];
                     
                     const randomResponse = responses[Math.floor(Math.random() * responses.length)];
@@ -210,20 +203,20 @@
         }
         
         function attachFile() {
-            alert("📎 File attachment feature coming soon!\n\nYou can upload photos of equipment or site requirements.");
+            alert("📎 You can attach photos of your facility, equipment needs, or site layout.\n\nThis feature is coming soon!");
         }
         
         function clearChat() {
-            if (confirm("Clear the entire conversation?")) {
+            if (confirm("Clear the conversation?")) {
                 chat.innerHTML = `
                     <div class="flex gap-4 message-bubble">
-                        <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
+                        <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-md">
                             🏗️
                         </div>
                         <div class="max-w-[75%]">
                             <div class="ai-bubble rounded-3xl rounded-tl-none px-6 py-4 text-base leading-relaxed">
-                                Hello! I'm Rental MCP — your expert for <strong>forklift and material handling equipment rentals</strong>.<br><br>
-                                Need a forklift for a short-term project, long-term lease, or a demo? I can help with availability, pricing, specs, and recommendations.
+                                Hello! I'm Malin Rental MCP — your AI assistant for <strong>forklift and material handling equipment rentals</strong> in Texas & Louisiana.<br><br>
+                                Whether you need short-term, long-term, or demo equipment, I can help with availability, recommendations, and fast quotes.
                             </div>
                             <p class="text-xs text-zinc-500 mt-2 pl-2">just now</p>
                         </div>
