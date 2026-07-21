@@ -144,13 +144,19 @@ app.get("/test/github/list-branches", async (req, res) => {
             result
         });
     } catch (err) {
-        console.error("❌ github.listBranches test failed:", err);
 
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
-    }
+    console.error(
+        "Branch ERROR",
+        err
+    );
+
+    res.status(500).json({
+        success: false,
+        error: err.message,
+        stack: err.stack
+    });
+
+}
 });
 
 app.get("/test/customer-search", async (req, res) => {
@@ -178,16 +184,14 @@ app.get("/test/search/all-equipment", async (req, res) => {
 });
 
 app.get("/test/rental-requests", async (req, res) => {
+  const result = await toolSource["rental_requests"].handler({
+    customerNumber: "9037070",
+    top: 5
+  });
 
-    const result = await chainEngine.run(
-        "searchRentalRequestsWorkflow",
-        {
-            query: req.query.customer || "Amazon"
-        }
-    );
+  console.log(JSON.stringify(result, null, 2));
 
-    res.json(result);
-
+  res.json(result);
 });
 
 
@@ -265,12 +269,18 @@ app.post("/chat", async (req, res) => {
 
     } catch (err) {
 
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
+    console.error(
+        "CHAT ERROR",
+        err
+    );
 
-    }
+    res.status(500).json({
+        success: false,
+        error: err.message,
+        stack: err.stack
+    });
+
+}
 
 });
 

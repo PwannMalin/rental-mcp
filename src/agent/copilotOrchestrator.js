@@ -103,12 +103,16 @@ console.log("Arguments:", args);
                     }
                 }
             } catch (err) {
-                console.error(`Error in step ${step}:`, err.message);
-                return { 
-                    success: false, 
-                    answer: "Sorry, I encountered a technical issue. Please try again." 
-                };
-            }
+    console.error(
+        `Error in step ${step}:`,
+        err
+    );
+
+    return {
+        success: false,
+        answer: `ERROR: ${err.message}`
+    };
+}
         }
 
         return { 
