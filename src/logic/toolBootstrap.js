@@ -101,6 +101,17 @@ console.log(
                 }
             },
             {
+    name: "rental_lookups",
+    description: "Get rental lookup values.",
+    tags: ["rental", "lookups"],
+    async handler() {
+        return await search.handler({
+            type: "LOOKUPS",
+            filterQuery: "1 eq 1"
+        });
+    }
+},
+            {
                 name: "search_request_lines",
                 description: "Find current rental request lines.",
                 tags: ["request", "lines"],
