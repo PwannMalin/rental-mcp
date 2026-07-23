@@ -68,28 +68,32 @@ function buildContainsFilter(field, value) {
 }
 
 function buildFilter(type, searchTerm, input = {}) {
-    const term = (searchTerm || "").trim();
+    const term = String(searchTerm || "").trim();
 
     switch (type) {
         case "CUSTOMER":
-    return `contains(CustomerName,'${escapeOData(term)}')`;
+            if (input.filterQuery) return input.filterQuery;
+            return term
+                ? `contains(CustomerName,'${escapeOData(term)}')`
+                : "";
 
-case "LOOKUPS":
-    return input.filterQuery || "";
-    
-case "RENTAL":
-    return input.filterQuery || "";
+        case "LOOKUPS":
+            return input.filterQuery || "";
+
+        case "RENTAL":
+            return input.filterQuery || "";
 
         case "MODEL":
+            return input.filterQuery ||
+                (term ? `contains(EquipModel,'${escapeOData(term)}')` : "");
+
         case "REQUEST_LINES":
-    return input.filterQuery ||
-           `contains(EquipModel,'${escapeOData(term)}')`;
+            return input.filterQuery || "";
 
         case "EQUIPMENT":
             if (input.filterQuery) return input.filterQuery;
             if (input.field) return buildContainsFilter(input.field, term);
 
-            // Default multi-field search
             return EQUIPMENT_FIELDS
                 .map(field => buildContainsFilter(field, term))
                 .join(" or ");
@@ -126,9 +130,9 @@ parameters: {
             description: "Specific field to search in for equipment or advanced searches."
         },
         filterQuery: {
-            type: "string",
-            description: "Custom OData filter. Use this when SearchTerm is unavailable or when applying a precise filter."
-        },
+    type: "string",
+    description: "Custom OData filter. For CUSTOMER searches, prefer contains(CustomerName,'name') instead of CustomerName eq 'name' unless an exact match is required."
+}
 
             },
             required: ["type"]
