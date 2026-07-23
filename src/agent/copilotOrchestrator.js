@@ -32,23 +32,10 @@ export class CopilotOrchestrator {
 console.log("content:", msg.content);
 console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
 console.log("==================================");
-if (
-    result.requiresSelection &&
-    result.options?.length
-) {
-    return {
-        answer:
-            "Multiple customer locations found.\n\n" +
-            result.options
-                .map(
-                    (c, i) =>
-                        `${i + 1}. ${c.customerName} (${c.branch})`
-                )
-                .join("\n"),
-        awaitingCustomerSelection: true,
-        options: result.options
-    };
-}
+
+
+
+
                 // Final answer
                 if (msg.content && !msg.tool_calls?.length) {
                     await ui.update("Finalizing response...");
@@ -82,6 +69,25 @@ if (
                             console.log("Calling tool:", toolName);
 console.log("Arguments:", args);
                             result = await this.registry.execute(toolName, args, context);
+
+                            if (
+    result?.requiresSelection &&
+    result?.options?.length
+) {
+    return {
+        success: true,
+        answer:
+            "Multiple customer locations found.\n\n" +
+            result.options
+                .map(
+                    (c, i) =>
+                        `${i + 1}. ${c.customerName} (${c.branch})`
+                )
+                .join("\n"),
+        awaitingCustomerSelection: true,
+        options: result.options
+    };
+}
                         console.log(
 "TOOL RESULT:",
 JSON.stringify(result, null, 2)
