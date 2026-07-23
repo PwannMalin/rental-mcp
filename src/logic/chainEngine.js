@@ -100,3 +100,8 @@ export class ChainEngine {
         };
     }
 }
+
+console.log(
+    "REGISTERED WORKFLOWS:",
+    Array.from(this.workflows.keys())
+);

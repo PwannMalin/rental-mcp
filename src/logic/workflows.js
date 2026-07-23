@@ -180,7 +180,8 @@ chainEngine.registerWorkflow("searchRentalRequestsWorkflow", [
                 input.searchTerm ||
                 input.customer ||
                 input.query ||
-                ""
+                "",
+                filterQuery: input.filterQuery
         })
     },
 

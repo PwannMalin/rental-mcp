@@ -151,6 +151,11 @@ JSON.stringify(result, null, 2)
     }
             }
         }));
+
+        console.log(
+    "TOOLS EXPOSED TO GPT:",
+    this.buildTools().map(t => t.function.name)
+);
     }
 
     buildSystemPrompt(userId, tenantId) {
@@ -196,3 +201,4 @@ ${JSON.stringify(memory, null, 2)}
         }];
     }
 }
+
