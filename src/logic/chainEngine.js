@@ -14,6 +14,12 @@ export class ChainEngine {
         }
 
         this.workflows.set(name, steps);
+
+        console.log(
+    "REGISTERED WORKFLOWS:",
+    Array.from(this.workflows.keys())
+);
+
     }
 
     getWorkflow(name) {
@@ -101,7 +107,3 @@ export class ChainEngine {
     }
 }
 
-console.log(
-    "REGISTERED WORKFLOWS:",
-    Array.from(this.workflows.keys())
-);
