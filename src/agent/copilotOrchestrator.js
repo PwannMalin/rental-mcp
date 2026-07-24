@@ -9,6 +9,14 @@ export class CopilotOrchestrator {
         this.activeRequest = null;
         this.pendingRequestSelection = null;
         this.pendingCustomerSelection = null;
+
+        // Schema memory
+        this.discoveredSchemas = {
+            CUSTOMER: null,
+            RENTAL: null,
+            REQUEST_LINES: null,
+            EQUIPMENT: null
+        };
     }
 
     getSessionKey(context) {
@@ -40,6 +48,22 @@ export class CopilotOrchestrator {
             row.requestId ||
             null
         );
+    }
+
+    /**
+     * Capture field names from the first row of a successful search
+     */
+    captureSchema(type, result) {
+        const rows = this.getRowsFromToolResult(result);
+        if (!rows.length) return;
+
+        const firstRow = rows[0];
+        const fields = Object.keys(firstRow);
+
+        if (fields.length > 0) {
+            this.discoveredSchemas[type] = fields;
+            console.log(`SCHEMA CAPTURED for ${type}:`, fields);
+        }
     }
 
     rememberActiveRequest(result, args, context) {
@@ -109,15 +133,13 @@ export class CopilotOrchestrator {
         );
 
         if (result?.success) {
-            this.rememberActiveRequest(
-                result,
-                {
-                    type: "RENTAL",
-                    filterQuery: `Customer eq '${match.CustomerNumber}'`,
-                    topCount: 10
-                },
-                context
-            );
+            this.rememberActiveRequest(result, {
+                type: "RENTAL",
+                filterQuery: `Customer eq '${match.CustomerNumber}'`,
+                topCount: 10
+            }, context);
+
+            this.captureSchema("RENTAL", result);
         }
 
         return result;
@@ -158,6 +180,8 @@ export class CopilotOrchestrator {
                 },
                 context
             );
+
+            this.captureSchema("REQUEST_LINES", result);
 
             const rows = this.getRowsFromToolResult(result);
 
@@ -204,7 +228,7 @@ export class CopilotOrchestrator {
             return selectionResult;
         }
 
-        // 2. Resolve pending request actions (e.g. "show lines")
+        // 2. Resolve pending request actions
         const requestActionResult = await this.tryResolvePendingRequestAction(
             userInput,
             context,
@@ -218,8 +242,6 @@ export class CopilotOrchestrator {
 
         let messages = this.buildSystemPrompt(userId, tenantId);
         messages.push({ role: "user", content: userInput });
-
-        let lastToolResult = null;
 
         for (let step = 0; step < this.maxSteps; step++) {
             await ui.typing();
@@ -276,15 +298,24 @@ export class CopilotOrchestrator {
 
                             result = await this.registry.execute(toolName, args, context);
 
+                            // Capture schema when possible
+                            if (result?.success) {
+                                const type = args?.type?.toUpperCase();
+                                if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+                                    this.captureSchema(type, result);
+                                }
+                            }
+
                             const looksLikeRentalResult =
                                 result?.data?.searchType === "RENTAL" ||
-                                result?.searchType === "RENTAL";
+                                result?.searchType === "RENTAL" ||
+                                args?.type === "RENTAL";
 
                             if (looksLikeRentalResult && result.success) {
                                 this.rememberActiveRequest(result, args, context);
                             }
 
-                            // Handle customer selection response from tool
+                            // Handle multi-customer selection
                             if (result?.requiresSelection && result?.options?.length) {
                                 this.pendingCustomerSelection = {
                                     options: result.options.map(c => ({
@@ -318,8 +349,6 @@ export class CopilotOrchestrator {
                                 message: `The ${toolName} tool encountered an issue.`
                             };
                         }
-
-                        lastToolResult = result;
 
                         messages.push({
                             role: "tool",
@@ -380,6 +409,14 @@ export class CopilotOrchestrator {
             lastActions: []
         };
 
+        // Build schema section dynamically
+        let schemaSection = "";
+        for (const [type, fields] of Object.entries(this.discoveredSchemas)) {
+            if (fields && fields.length) {
+                schemaSection += `\n### Discovered fields for ${type}:\n${fields.join(", ")}\n`;
+            }
+        }
+
         return [
             {
                 role: "system",
@@ -397,6 +434,16 @@ Your job is to help coordinators search customers, rentals, request headers, and
    - Then search RENTAL using: Customer eq '<CustomerNumber>'
 3. If multiple customer locations are returned, present them and wait for the user to choose.
 4. Once a customer is selected, continue the rental search automatically.
+
+### Schema-Aware Filtering Rules
+
+- Prefer discovered fields over assumptions.
+- Never assume CustomerName exists on RENTAL.
+- Never use CustomerName in RENTAL filters unless it appears in the discovered schema.
+- Prefer CustomerNumber when available.
+- Use Branch for location selection.
+
+${schemaSection}
 
 ### GitHub Tool Rules
 - Do NOT use GitHub tools during normal rental conversations.
