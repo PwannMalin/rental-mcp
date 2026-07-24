@@ -185,12 +185,20 @@ Important:
 
                 const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
-                if (type !== "LOOKUPS" && !searchTerm && !input.filterQuery) {
-                    return {
-                        success: false,
-                        error: "SearchTerm or filterQuery is required."
-                    };
-                }
+                const allowEmptyFilter =
+    type === "LOOKUPS" ||
+    type === "RENTAL";
+
+if (
+    !allowEmptyFilter &&
+    !searchTerm &&
+    !input.filterQuery
+) {
+    return {
+        success: false,
+        error: "SearchTerm or filterQuery is required."
+    };
+}
 
                 const payload = {
                     filterQuery: buildFilter(type, normalizedSearchTerm, input),
@@ -261,7 +269,12 @@ Important:
                 console.log("ROWS LENGTH:", Array.isArray(rows) ? rows.length : "NOT ARRAY");
                 console.log("FIRST ROW:", JSON.stringify(safeRows[0], null, 2));
 
-                const limit = Number(input.limit || input.top || 10);
+                const limit = Number(
+    input.limit ||
+    input.top ||
+    input.topCount ||
+    10
+);
                 const preview = safeRows.slice(0, limit);
 
                 // Extract discovered fields from the first row
