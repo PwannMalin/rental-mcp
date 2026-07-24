@@ -170,7 +170,73 @@ JSON.stringify(result, null, 2)
         return [{
             role: "system",
             content: `
-Use GitHub tools.
+Stop working on schema-aware filtering.
+
+New issue classification:
+Workflow routing issue
+
+Current bug:
+
+User:
+find a request for Clampitt Paper Inc
+
+MCP:
+returns:
+1. ADDISON - 669007
+2. HOUSTON - 669002
+3. HOUSTON - 669001
+
+User:
+Addison
+
+Expected:
+Select customer 669007 and continue rental search.
+
+Actual:
+Starts a new conversation.
+
+Root cause:
+CopilotOrchestrator does not persist pending customer selections across turns.
+
+Required fix:
+
+Modify:
+src/agent/copilotOrchestrator.js
+
+Implement pending selection memory:
+
+this.pendingCustomerSelection
+
+When multiple customer locations are returned:
+store them.
+
+Before calling the LLM on the next user message:
+check if there is a pending customer selection.
+
+If the user replies:
+- Addison
+- Houston
+- 1
+- 2
+- 669007
+
+resolve that to the matching customer.
+
+Then automatically execute:
+
+{
+  "type": "RENTAL",
+  "filterQuery": "Customer eq '669007'"
+}
+
+Do not work on discoveredFields.
+Do not work on schema memory.
+Fix customer branch selection workflow.
+Update branch:
+fix/schema-aware-odata-filters
+Update PR #2.
+
+            Use GitHub tools.
 
 The MCP system prompt is NOT located in:
 
