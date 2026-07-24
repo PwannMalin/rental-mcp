@@ -4,56 +4,142 @@ export class CopilotOrchestrator {
         this.llm = llm;
         this.memory = memory;
         this.maxSteps = 10;
+
+        // Add request context memory
+        this.activeRequest = null;
+        this.pendingRequestSelection = null;
     }
 
-    async tryResolvePendingCustomerSelection(
-    userInput,
-    context,
-    ui
-) {
-    if (!this.pendingCustomerSelection) {
-        return null;
+    getSessionKey(context) {
+        return `${context.userId || 'nouser'}_${context.tenantId || 'notenant'}`;
     }
 
-    const value = String(userInput).trim();
+    getRowsFromToolResult(result) {
+        if (!result || !result.value) return [];
+        return result.value;
+    }
 
-    const match =
-        this.pendingCustomerSelection.options.find(
+    getRequestId(row) {
+        return row.RequestID || row.RequestId || row.requestID || row.requestId || null;
+    }
+
+    rememberActiveRequest(result, args, context) {
+        const rows = this.getRowsFromToolResult(result);
+        if (!rows.length) {
+            this.activeRequest = null;
+            this.pendingRequestSelection = null;
+            return;
+        }
+
+        if (rows.length === 1) {
+            const row = rows[0];
+            this.activeRequest = {
+                RequestID: this.getRequestId(row),
+                Customer: row.Customer || row.CustomerNumber || null,
+                CustomerNumber: row.CustomerNumber || row.Customer || null,
+                Branch: row.Branch || null,
+                RequestStatus: row.Status || row.RequestStatus || null,
+                ContactName: row.ContactName || row.Contact || null
+            };
+            this.pendingRequestSelection = null;
+        } else {
+            // Multiple requests returned, store as pending selection
+            this.pendingRequestSelection = {
+                options: rows.map(row => ({
+                    RequestID: this.getRequestId(row),
+                    Customer: row.Customer || row.CustomerNumber || null,
+                    CustomerNumber: row.CustomerNumber || row.Customer || null,
+                    Branch: row.Branch || null,
+                    RequestStatus: row.Status || row.RequestStatus || null,
+                    ContactName: row.ContactName || row.Contact || null
+                }))
+            };
+            this.activeRequest = null;
+        }
+    }
+
+    async tryResolvePendingCustomerSelection(userInput, context, ui) {
+        if (!this.pendingCustomerSelection) {
+            return null;
+        }
+
+        const value = String(userInput).trim();
+
+        const match = this.pendingCustomerSelection.options.find(
             c =>
                 c.customerNumber === value ||
                 c.branch?.toLowerCase() === value.toLowerCase()
         );
 
-    if (!match) {
+        if (!match) {
+            return null;
+        }
+
+        this.pendingCustomerSelection = null;
+
+        return await this.registry.execute(
+            "search.execute",
+            {
+                type: "RENTAL",
+                filterQuery: `Customer eq '${match.customerNumber}'`,
+                topCount: 10
+            },
+            context
+        );
+    }
+
+    async tryResolvePendingRequestAction(userInput, context, ui) {
+        if (!this.activeRequest) {
+            return null;
+        }
+
+        const userText = String(userInput).toLowerCase();
+
+        // Check if user is asking for request lines or details
+        const requestLineKeywords = [
+            'request lines',
+            'lines',
+            'show me the lines',
+            'show lines',
+            'details',
+            'show details',
+            'yes',
+            'show',
+            'show request lines'
+        ];
+
+        if (requestLineKeywords.some(keyword => userText.includes(keyword))) {
+            // Execute request lines search directly
+            const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
+            await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
+            const result = await this.registry.execute(
+                "search.execute",
+                {
+                    type: "REQUEST_LINES",
+                    filterQuery,
+                    topCount: 10
+                },
+                context
+            );
+            return result;
+        }
+
         return null;
     }
 
-    this.pendingCustomerSelection = null;
-
-    return await this.registry.execute(
-        "search.execute",
-        {
-            type: "RENTAL",
-            filterQuery:
-                `Customer eq '${match.customerNumber}'`,
-            topCount: 10
-        },
-        context
-    );
-}
-
     async runStreaming(userInput, context = {}, ui) {
-    
-        const selectionResult = await this.tryResolvePendingCustomerSelection(
-        userInput,
-        context,
-        ui
-    );
+        // Check pending customer selection first
+        const selectionResult = await this.tryResolvePendingCustomerSelection(userInput, context, ui);
+        if (selectionResult) {
+            return selectionResult;
+        }
 
-    if (selectionResult) {
-        return selectionResult;
-    }
-        
+        // Check pending request action
+        const requestActionResult = await this.tryResolvePendingRequestAction(userInput, context, ui);
+        if (requestActionResult) {
+            return requestActionResult;
+        }
+
         const { userId, tenantId } = context;
 
         let messages = this.buildSystemPrompt(userId, tenantId);
@@ -76,12 +162,9 @@ export class CopilotOrchestrator {
                 const msg = response.choices[0].message;
 
                 console.log("========== LLM RESPONSE ==========");
-console.log("content:", msg.content);
-console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
-console.log("==================================");
-
-
-
+                console.log("content:", msg.content);
+                console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
+                console.log("==================================");
 
                 // Final answer
                 if (msg.content && !msg.tool_calls?.length) {
@@ -114,31 +197,37 @@ console.log("==================================");
 
                         try {
                             console.log("Calling tool:", toolName);
-console.log("Arguments:", args);
+                            console.log("Arguments:", args);
                             result = await this.registry.execute(toolName, args, context);
 
+                            // Remember active request if tool call is search.execute and type is RENTAL
+                            if (toolName === "search.execute" && args.type === "RENTAL" && result.success) {
+                                this.rememberActiveRequest(result, args, context);
+                            }
+
                             if (
-    result?.requiresSelection &&
-    result?.options?.length
-) {
-    return {
-        success: true,
-        answer:
-            "Multiple customer locations found.\n\n" +
-            result.options
-                .map(
-                    (c, i) =>
-                        `${i + 1}. ${c.customerName} (${c.branch})`
-                )
-                .join("\n"),
-        awaitingCustomerSelection: true,
-        options: result.options
-    };
-}
-                        console.log(
-"TOOL RESULT:",
-JSON.stringify(result, null, 2)
-);
+                                result?.requiresSelection &&
+                                result?.options?.length
+                            ) {
+                                return {
+                                    success: true,
+                                    answer:
+                                        "Multiple customer locations found.\n\n" +
+                                        result.options
+                                            .map(
+                                                (c, i) =>
+                                                    `${i + 1}. ${c.customerName} (${c.branch})`
+                                            )
+                                            .join("\n"),
+                                    awaitingCustomerSelection: true,
+                                    options: result.options
+                                };
+                            }
+
+                            console.log(
+                                "TOOL RESULT:",
+                                JSON.stringify(result, null, 2)
+                            );
                         } catch (toolErr) {
                             console.error(`Tool ${toolName} failed:`, toolErr.message);
                             result = {
@@ -160,16 +249,16 @@ JSON.stringify(result, null, 2)
                     }
                 }
             } catch (err) {
-    console.error(
-        `Error in step ${step}:`,
-        err
-    );
+                console.error(
+                    `Error in step ${step}:`,
+                    err
+                );
 
-    return {
-        success: false,
-        answer: `ERROR: ${err.message}`
-    };
-}
+                return {
+                    success: false,
+                    answer: `ERROR: ${err.message}`
+                };
+            }
         }
 
         return { 
@@ -179,33 +268,33 @@ JSON.stringify(result, null, 2)
     }
 
     buildTools() {
-    const tools = this.registry?.tools || {};
-    const toolList = tools instanceof Map
-        ? Array.from(tools.values())
-        : Object.values(tools);
+        const tools = this.registry?.tools || {};
+        const toolList = tools instanceof Map
+            ? Array.from(tools.values())
+            : Object.values(tools);
 
-    const builtTools = toolList.map(t => ({
-        type: "function",
-        function: {
-            name: t.name,
-            description: t.description || "No description provided",
-            parameters:
-                t.parameters ||
-                t.inputSchema ||
-                t.schema || {
-                    type: "object",
-                    properties: {}
-                }
-        }
-    }));
+        const builtTools = toolList.map(t => ({
+            type: "function",
+            function: {
+                name: t.name,
+                description: t.description || "No description provided",
+                parameters:
+                    t.parameters ||
+                    t.inputSchema ||
+                    t.schema || {
+                        type: "object",
+                        properties: {}
+                    }
+            }
+        }));
 
-    console.log(
-        "TOOLS EXPOSED TO GPT:",
-        builtTools.map(t => t.function.name)
-    );
+        console.log(
+            "TOOLS EXPOSED TO GPT:",
+            builtTools.map(t => t.function.name)
+        );
 
-    return builtTools;
-}
+        return builtTools;
+    }
 
     buildSystemPrompt(userId, tenantId) {
         const memory = this.memory?.get?.(userId, tenantId) || { 
@@ -399,8 +488,6 @@ Use these exact values for all GitHub tools unless the user explicitly says othe
 
 Never infer owner or repo from the project name.
 
-If a GitHub tool succeeds and returns owner/repo values, remember and reuse those exact values for the rest of the session.
-
 If github.getFile returns 404:
 1. Verify owner and repo are correct.
 2. Retry with owner PwannMalin and repo rental-mcp.
@@ -430,7 +517,6 @@ Whenever a user reports a bug, incorrect behavior, unexpected result, or asks wh
 
 Follow this sequence:
 
-
 User Request
 → LLM reasoning
 → Tool selection
@@ -443,7 +529,6 @@ User Request
 → Power Automate response
 → Response parsing
 → Final assistant response
-
 
 Do **not** guess where the problem occurred.
 
@@ -737,7 +822,6 @@ Watch for these common failures:
 * response body is an empty string
 * workflow not exposed as a tool
 * workflow bypassed
-* search.execute called directly when workflow should be used
 * invalid Power Automate payload
 * response shape changed unexpectedly
 
@@ -833,7 +917,7 @@ When a GitHub tool fails because of missing parameters:
     "baseBranch": "main"
   }
 
-When the user asks to improve the MCP, fix code, create a branch, or open a PR:
+When the user asks to improve the MCP, fix code, create a branch, or open a pull request:
 - Use GitHub tools.
 - Do not only provide a diagnosis.
 - Do not ask for confirmation.
@@ -855,23 +939,19 @@ Always:
 * Offer the next best action when a tool cannot complete a request.
 * Be concise, professional, and evidence-driven.
 * Prefer deterministic behavior over assumptions.
-
-If information is uncertain, ask for clarification instead of inventing an answer.
-
-Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
+* If information is uncertain, ask for clarification instead of inventing an answer.
+* Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
 # Available Capabilities
 - You have access to MCP tools for customer, rental, and request line searches.
 - You may use GitHub tools only when the user explicitly requests code changes.
-- You do **not** have direct access to Power Automate designer or runtime logs unless provided.
+- Do not have direct access to Power Automate designer or runtime logs unless provided.
 
 # When You Lack Information
 If critical evidence (logs, exact error, payload, or file content) is missing:
 1. Clearly state what is missing.
 2. Ask for the specific piece of evidence.
 3. Do not invent a root cause.
-${JSON.stringify(memory, null, 2)}
             `.trim()
         }];
     }
 }
-
