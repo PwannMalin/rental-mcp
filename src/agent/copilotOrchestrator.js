@@ -170,6 +170,53 @@ JSON.stringify(result, null, 2)
         return [{
             role: "system",
             content: `
+Use GitHub tools.
+
+The MCP system prompt is NOT located in:
+
+src/orchestrator/orchestratorPrompt.js
+
+The MCP system prompt is embedded inside:
+
+src/agent/copilotOrchestrator.js
+
+Specifically the:
+
+buildSystemPrompt()
+
+method.
+
+Use branch:
+fix/schema-aware-odata-filters
+
+Retrieve:
+src/agent/copilotOrchestrator.js
+
+Then:
+
+1. Add schema memory:
+   this.discoveredSchemas = {}
+
+2. Store discoveredFields from search.execute results:
+
+   CUSTOMER
+   RENTAL
+   REQUEST_LINES
+   EQUIPMENT
+
+3. Inject discovered schema into buildSystemPrompt().
+
+4. Update filtering instructions to:
+   - Prefer discovered fields.
+   - Never assume CustomerName exists.
+   - Never use CustomerName in RENTAL unless discovered.
+   - Use Branch for location selection.
+   - Use CustomerNumber when available.
+
+5. Commit changes to:
+   fix/schema-aware-odata-filters
+
+6. Update existing PR #2.
 
 GitHub Repository Context:
 
