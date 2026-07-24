@@ -4,10 +4,48 @@ export class CopilotOrchestrator {
         this.llm = llm;
         this.memory = memory;
         this.maxSteps = 10;
+
+        // Add discovered schemas memory
+        this.discoveredSchemas = {};
+
+        // Add pending customer selection memory
+        this.pendingCustomerSelection = null;
     }
 
     async runStreaming(userInput, context = {}, ui) {
         const { userId, tenantId } = context;
+
+        // Check if there is a pending customer selection
+        if (this.pendingCustomerSelection) {
+            // Try to resolve userInput as a selection
+            const selection = this.resolveCustomerSelection(userInput, this.pendingCustomerSelection);
+
+            if (selection) {
+                // Clear pending selection
+                this.pendingCustomerSelection = null;
+
+                // Build filterQuery using discovered schema or fallback to CustomerNumber
+                const rentalCustomerField = this.getRentalCustomerField();
+
+                const filterQuery = `${rentalCustomerField} eq '${selection.CustomerNumber}'`;
+
+                // Execute RENTAL search automatically
+                const rentalResult = await this.registry.execute('search.execute', {
+                    type: 'RENTAL',
+                    filterQuery
+                }, context);
+
+                // Return rental results directly
+                return {
+                    success: true,
+                    answer: `Showing rental requests for ${selection.customerName} (${selection.branch}):`,
+                    rentalResult
+                };
+            } else {
+                // Could not resolve selection, clear pending
+                this.pendingCustomerSelection = null;
+            }
+        }
 
         let messages = this.buildSystemPrompt(userId, tenantId);
         messages.push({ role: "user", content: userInput });
@@ -29,12 +67,9 @@ export class CopilotOrchestrator {
                 const msg = response.choices[0].message;
 
                 console.log("========== LLM RESPONSE ==========");
-console.log("content:", msg.content);
-console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
-console.log("==================================");
-
-
-
+                console.log("content:", msg.content);
+                console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
+                console.log("==================================");
 
                 // Final answer
                 if (msg.content && !msg.tool_calls?.length) {
@@ -67,31 +102,43 @@ console.log("==================================");
 
                         try {
                             console.log("Calling tool:", toolName);
-console.log("Arguments:", args);
+                            console.log("Arguments:", args);
                             result = await this.registry.execute(toolName, args, context);
 
+                            // Store discovered schema for CUSTOMER, RENTAL, REQUEST_LINES, EQUIPMENT
+                            if (toolName === 'search.execute' && result?.value?.length) {
+                                const type = args.type;
+                                if (type) {
+                                    this.discoveredSchemas[type] = Object.keys(result.value[0]);
+                                }
+                            }
+
                             if (
-    result?.requiresSelection &&
-    result?.options?.length
-) {
-    return {
-        success: true,
-        answer:
-            "Multiple customer locations found.\n\n" +
-            result.options
-                .map(
-                    (c, i) =>
-                        `${i + 1}. ${c.customerName} (${c.branch})`
-                )
-                .join("\n"),
-        awaitingCustomerSelection: true,
-        options: result.options
-    };
-}
-                        console.log(
-"TOOL RESULT:",
-JSON.stringify(result, null, 2)
-);
+                                result?.requiresSelection &&
+                                result?.options?.length
+                            ) {
+                                // Store pending customer selection
+                                this.pendingCustomerSelection = result.options;
+
+                                return {
+                                    success: true,
+                                    answer:
+                                        "Multiple customer locations found.\n\n" +
+                                        result.options
+                                            .map(
+                                                (c, i) =>
+                                                    `${i + 1}. ${c.customerName} (${c.branch})`
+                                            )
+                                            .join("\n"),
+                                    awaitingCustomerSelection: true,
+                                    options: result.options
+                                };
+                            }
+
+                            console.log(
+                                "TOOL RESULT:",
+                                JSON.stringify(result, null, 2)
+                            );
                         } catch (toolErr) {
                             console.error(`Tool ${toolName} failed:`, toolErr.message);
                             result = {
@@ -113,16 +160,16 @@ JSON.stringify(result, null, 2)
                     }
                 }
             } catch (err) {
-    console.error(
-        `Error in step ${step}:`,
-        err
-    );
+                console.error(
+                    `Error in step ${step}:`,
+                    err
+                );
 
-    return {
-        success: false,
-        answer: `ERROR: ${err.message}`
-    };
-}
+                return {
+                    success: false,
+                    answer: `ERROR: ${err.message}`
+                };
+            }
         }
 
         return { 
@@ -131,34 +178,94 @@ JSON.stringify(result, null, 2)
         };
     }
 
-    buildTools() {
-    const tools = this.registry?.tools || {};
-    const toolList = tools instanceof Map
-        ? Array.from(tools.values())
-        : Object.values(tools);
+    // Helper to resolve user selection against pending customer options
+    resolveCustomerSelection(userInput, options) {
+        const inputLower = userInput.trim().toLowerCase();
 
-    const builtTools = toolList.map(t => ({
-        type: "function",
-        function: {
-            name: t.name,
-            description: t.description || "No description provided",
-            parameters:
-                t.parameters ||
-                t.inputSchema ||
-                t.schema || {
-                    type: "object",
-                    properties: {}
-                }
+        // Try numeric index selection
+        const index = parseInt(inputLower, 10);
+        if (!isNaN(index) && index >= 1 && index <= options.length) {
+            return options[index - 1];
         }
-    }));
 
-    console.log(
-        "TOOLS EXPOSED TO GPT:",
-        builtTools.map(t => t.function.name)
-    );
+        // Try matching branch or customerName case-insensitive
+        for (const option of options) {
+            if (
+                option.branch && option.branch.toLowerCase() === inputLower
+            ) {
+                return option;
+            }
+            if (
+                option.customerName && option.customerName.toLowerCase() === inputLower
+            ) {
+                return option;
+            }
+            if (
+                option.CustomerNumber && option.CustomerNumber.toString() === inputLower
+            ) {
+                return option;
+            }
+        }
 
-    return builtTools;
-}
+        return null;
+    }
+
+    // Helper to get the field name for CustomerNumber in RENTAL schema
+    getRentalCustomerField() {
+        const rentalSchema = this.discoveredSchemas['RENTAL'];
+        if (!rentalSchema) {
+            // Fallback
+            return 'Customer';
+        }
+
+        // Prefer CustomerNumber if present
+        if (rentalSchema.includes('CustomerNumber')) {
+            return 'CustomerNumber';
+        }
+
+        // Else fallback to Customer
+        if (rentalSchema.includes('Customer')) {
+            return 'Customer';
+        }
+
+        // Else fallback to first field that contains 'Customer'
+        const customerField = rentalSchema.find(f => f.toLowerCase().includes('customer'));
+        if (customerField) {
+            return customerField;
+        }
+
+        // Default fallback
+        return 'Customer';
+    }
+
+    buildTools() {
+        const tools = this.registry?.tools || {};
+        const toolList = tools instanceof Map
+            ? Array.from(tools.values())
+            : Object.values(tools);
+
+        const builtTools = toolList.map(t => ({
+            type: "function",
+            function: {
+                name: t.name,
+                description: t.description || "No description provided",
+                parameters:
+                    t.parameters ||
+                    t.inputSchema ||
+                    t.schema || {
+                        type: "object",
+                        properties: {}
+                    }
+            }
+        }));
+
+        console.log(
+            "TOOLS EXPOSED TO GPT:",
+            builtTools.map(t => t.function.name)
+        );
+
+        return builtTools;
+    }
 
     buildSystemPrompt(userId, tenantId) {
         const memory = this.memory?.get?.(userId, tenantId) || { 
@@ -167,11 +274,15 @@ JSON.stringify(result, null, 2)
             lastActions: [] 
         };
 
+        // Include discovered schemas in prompt
+        const customerFields = this.discoveredSchemas['CUSTOMER'] || [];
+        const rentalFields = this.discoveredSchemas['RENTAL'] || [];
+
         return [{
             role: "system",
             content: `
 
-            When searching for requests for a customer name:
+When searching for requests for a customer name:
 
 1. Search CUSTOMER.
 2. If more than one CustomerNumber is returned:
@@ -179,6 +290,14 @@ JSON.stringify(result, null, 2)
    - Count the results.
    - Present a summary.
 3. Only ask the user which customer they mean if there are multiple accounts with active requests.
+
+Filtering instructions:
+- Prefer discovered fields: CUSTOMER fields: ${customerFields.join(", ")}, RENTAL fields: ${rentalFields.join(", ")}.
+- Never assume CustomerName exists.
+- Never use CustomerName in RENTAL unless discovered.
+- Use Branch for location selection.
+- Use CustomerNumber when available.
+
 Issue Classification:
 Workflow routing validated
 
@@ -725,88 +844,3 @@ Regression Prevention:
 
 
 ---
-If the assistant just presented a customer selection list and the user replies with:
-- a branch name
-- a location
-- a number
-- an item from the list
-
-treat the reply as a selection, not a new search.
-
-Use the previously returned customer options to determine the chosen customer.
-
-When constructing OData filters, prefer fields discovered from previous tool results over hard-coded field names.
-
-Never assume a field exists.
-Use schema information returned by tools.
-
-Schema Discovery Rules
-
-Do not assume field names.
-
-Whenever a tool returns data:
-
-1. Examine the first row returned.
-2. Record all available field names.
-3. Prefer filtering using actual returned field names.
-4. Build future OData filters only from discovered fields.
-5. If CustomerName is not present, do not use CustomerName.
-6. If Branch is present, Branch may be used for filtering.
-7. If CustomerNumber is present, CustomerNumber may be used for filtering.
-8. Use fields exactly as returned in the payload.
-
-
-GitHub tool retry rules:
-
-When a GitHub tool fails because of missing parameters:
-- Do not stop.
-- Read the tool schema from the available tools.
-- Retry with the exact required parameter names.
-- For branch creation, use:
-  {
-    "branchName": "<new branch name>",
-    "baseBranch": "main"
-  }
-
-When the user asks to improve the MCP, fix code, create a branch, or open a PR:
-- Use GitHub tools.
-- Do not only provide a diagnosis.
-- Do not ask for confirmation.
-- Create a branch first.
-- Use github.getFile before github.updateFile.
-- Update files only on the new branch.
-- Create a pull request after changes.
-
-
-# General Assistant Behavior
-
-You are also a professional rental management assistant.
-
-Always:
-
-* Use MCP tools whenever live data is required.
-* Never fabricate customer, rental, request, or equipment information.
-* Explain tool failures honestly.
-* Offer the next best action when a tool cannot complete a request.
-* Be concise, professional, and evidence-driven.
-* Prefer deterministic behavior over assumptions.
-
-If information is uncertain, ask for clarification instead of inventing an answer.
-
-Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
-# Available Capabilities
-- You have access to MCP tools for customer, rental, and request line searches.
-- You may use GitHub tools only when the user explicitly requests code changes.
-- You do **not** have direct access to Power Automate designer or runtime logs unless provided.
-
-# When You Lack Information
-If critical evidence (logs, exact error, payload, or file content) is missing:
-1. Clearly state what is missing.
-2. Ask for the specific piece of evidence.
-3. Do not invent a root cause.
-${JSON.stringify(memory, null, 2)}
-            `.trim()
-        }];
-    }
-}
-
