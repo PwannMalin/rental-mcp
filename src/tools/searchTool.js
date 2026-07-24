@@ -1,6 +1,5 @@
 import { callPowerAutomate } from "../logic/powerAutomateClient.js";
 
-
 const SEARCH_TYPES = {
     CUSTOMER: {
         env: "PA_SEARCH_CUSTOMERS_URL",
@@ -55,9 +54,6 @@ function normalizeEquipmentSearchTerm(value = "") {
 
     return EQUIPMENT_ALIASES[key] || raw;
 };
-
-
-
 
 function escapeOData(value = "") {
     return String(value).replace(/'/g, "''");
@@ -124,271 +120,198 @@ Important:
 - Use REQUEST_LINES with RequestID to retrieve request lines.
 `,
 
-        
-parameters: {
-    type: "object",
-    properties: {
-        type: {
-            type: "string",
-            enum: [
-                "CUSTOMER",
-                "EQUIPMENT",
-                "MODEL",
-                "RENTAL",
-                "REQUEST_LINES",
-                "LOOKUPS",
-                "CUSTOMER_INFO"
-            ],
-            description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
+        parameters: {
+            type: "object",
+            properties: {
+                type: {
+                    type: "string",
+                    enum: [
+                        "CUSTOMER",
+                        "EQUIPMENT",
+                        "MODEL",
+                        "RENTAL",
+                        "REQUEST_LINES",
+                        "LOOKUPS",
+                        "CUSTOMER_INFO"
+                    ],
+                    description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
+                },
+
+                SearchTerm: {
+                    type: "string",
+                    description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
+                },
+
+                field: {
+                    type: "string",
+                    description: "Specific field to search in for equipment or advanced searches."
+                },
+
+                filterQuery: {
+                    type: "string",
+                    description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
+                },
+
+                topCount: {
+                    type: "number",
+                    description: "Optional max number of rows to return."
+                },
+
+                orderBy: {
+                    type: "string",
+                    description: "Optional OData order by value, such as CustomerName desc. This must be text, not a number."
+                }
+            },
+            required: ["type"]
         },
-
-        SearchTerm: {
-            type: "string",
-            description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
-        },
-
-        field: {
-            type: "string",
-            description: "Specific field to search in for equipment or advanced searches."
-        },
-
-        filterQuery: {
-            type: "string",
-            description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
-        },
-
-        topCount: {
-            type: "number",
-            description: "Optional max number of rows to return."
-        },
-
-        orderBy: {
-            type: "string",
-            description: "Optional OData order by value, such as CustomerName desc. This must be text, not a number."
-        }
-    },
-    required: ["type"]
-},
-
-      
 
         async handler(input = {}) {
-    try {
+            try {
+                console.log("RAW INPUT:", JSON.stringify(input, null, 2));
 
-        console.log(
-    "RAW INPUT:",
-    JSON.stringify(input, null, 2)
-);
-        const type = String(
-    input.type ||
-    input.searchType ||
-    input.SearchType ||
-    ""
-).trim().toUpperCase();
-console.log("RESOLVED TYPE:", type);
-console.log("INPUT TYPE:", input.type);
-console.log("INPUT SEARCHTYPE:", input.searchType);
-        const config = SEARCH_TYPES[type];
+                const type = String(input.type || input.searchType || input.SearchType || "").trim().toUpperCase();
+                console.log("RESOLVED TYPE:", type);
 
-        if (!config) {
-            return {
-                success: false,
-                error: `Unsupported search type: ${type}. Use CUSTOMER, EQUIPMENT, MODEL, RENTAL, REQUEST_LINES, LOOKUPS, or CUSTOMER_INFO.`
-            };
-        }
+                const config = SEARCH_TYPES[type];
 
-    const searchTerm =
-    input.SearchTerm ||
-    input.searchTerm ||
-    input.searchText ||
-    input.SearchText ||
-    input.query ||
-    "";
+                if (!config) {
+                    return {
+                        success: false,
+                        error: `Unsupported search type: ${type}. Use CUSTOMER, EQUIPMENT, MODEL, RENTAL, REQUEST_LINES, LOOKUPS, or CUSTOMER_INFO.`
+                    };
+                }
 
-const normalizedSearchTerm =
-    type === "EQUIPMENT"
-        ? normalizeEquipmentSearchTerm(searchTerm)
-        : searchTerm;
+                const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
 
+                const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
-       if (
-    type !== "LOOKUPS" &&
-    !searchTerm &&
-    !input.filterQuery
-) {
-            return {
-                success: false,
-                error: "SearchTerm or filterQuery is required."
-            };
-        }
+                if (type !== "LOOKUPS" && !searchTerm && !input.filterQuery) {
+                    return {
+                        success: false,
+                        error: "SearchTerm or filterQuery is required."
+                    };
+                }
 
-    const payload = {
-    filterQuery: buildFilter(
-        type,
-        normalizedSearchTerm,
-        input
-    ),
-    topCount: input.topCount,
-    orderBy: input.orderBy
-};
+                const payload = {
+                    filterQuery: buildFilter(type, normalizedSearchTerm, input),
+                    topCount: input.topCount,
+                    orderBy: input.orderBy
+                };
 
-        if (type === "CUSTOMER_INFO") {
-            payload.filterQuerydoor = input.filterQuerydoor || "";
-        }
+                if (type === "CUSTOMER_INFO") {
+                    payload.filterQuerydoor = input.filterQuerydoor || "";
+                }
 
-        console.log(`🔍 ${type} Search:`, payload);
-        console.log("Environment variable:", config.env);
-        console.log("URL exists:", !!process.env[config.env]);
-        console.log("URL starts with:", process.env[config.env]?.substring(0, 60));
+                console.log(`🔍 ${type} Search:`, payload);
+                console.log("Environment variable:", config.env);
+                console.log("URL exists:", !!process.env[config.env]);
+                console.log("URL starts with:", process.env[config.env]?.substring(0, 60));
 
-        let headers = {};
+                let headers = {};
 
-if (type === "EQUIPMENT") {
-    const equipmentSearchTerm =
-    normalizedSearchTerm;
+                if (type === "EQUIPMENT") {
+                    const equipmentSearchTerm = normalizedSearchTerm;
+                    headers = { equipsearchtext: equipmentSearchTerm };
+                    console.log("Equipment header search term:", equipmentSearchTerm);
+                }
 
-    headers = {
-        equipsearchtext: equipmentSearchTerm
-    };
+                const flowResponse = await callPowerAutomate({
+                    url: process.env[config.env],
+                    payload,
+                    headers,
+                    flowName: config.flowName
+                });
 
-    console.log("Equipment header search term:", equipmentSearchTerm);
-}
+                if (type === "LOOKUPS") {
+                    console.log("RAW LOOKUPS RESPONSE:", JSON.stringify(flowResponse, null, 2));
+                }
 
-const flowResponse = await callPowerAutomate({
-    url: process.env[config.env],
-    payload,
-    headers,
-    flowName: config.flowName
-});
-if (type === "LOOKUPS") {
-    console.log(
-        "RAW LOOKUPS RESPONSE:",
-        JSON.stringify(flowResponse, null, 2)
-    );
-}
-        /*
-          Your logs show the Power Automate shape is:
-          {
-            success: true,
-            data: {
-              value: [...]
+                const responseBody = flowResponse?.data || {};
+
+                if (type === "LOOKUPS" && Array.isArray(responseBody)) {
+                    const lookupGroups = {};
+                    responseBody.forEach(item => {
+                        lookupGroups[item.type] = item.load?.value || [];
+                    });
+                    return {
+                        success: true,
+                        searchType: type,
+                        lookupGroups,
+                        count: Object.keys(lookupGroups).length,
+                        rows: lookupGroups
+                    };
+                }
+
+                let rows = [];
+
+                if (Array.isArray(responseBody)) {
+                    rows = responseBody;
+                } else if (Array.isArray(responseBody?.value)) {
+                    rows = responseBody.value;
+                } else if (Array.isArray(responseBody?.results?.value)) {
+                    rows = responseBody.results.value;
+                } else if (Array.isArray(responseBody?.data?.value)) {
+                    rows = responseBody.data.value;
+                } else if (Array.isArray(flowResponse?.value)) {
+                    rows = flowResponse.value;
+                }
+
+                const safeRows = Array.isArray(rows) ? rows : [];
+
+                console.log("ROWS LENGTH:", Array.isArray(rows) ? rows.length : "NOT ARRAY");
+                console.log("FIRST ROW:", JSON.stringify(safeRows[0], null, 2));
+
+                const limit = Number(input.limit || input.top || 10);
+                const preview = safeRows.slice(0, limit);
+
+                // Extract discovered fields from the first row
+                let discoveredFields = [];
+                if (preview.length > 0) {
+                    discoveredFields = Object.keys(preview[0]);
+                }
+
+                let answer = "";
+
+                if (type === "CUSTOMER") {
+                    answer = preview.length
+                        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
+                          preview.map((row, index) => {
+                              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
+                              const branch = row.Branch || row.branch || row.BranchName || row.branchName || "Unknown branch";
+                              const customerNumber = row.CustomerNumber || row.CustomerNo || row.CustomerID || row.CustomerId || row.customerNumber || "";
+                              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
+                          }).join("\n")
+                        : `No customer results found for "${searchTerm}".`;
+                } else {
+                    answer = preview.length
+                        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
+                        : `No results found for "${searchTerm}".`;
+                }
+
+                console.log(`${config.flowName} succeeded`);
+                console.log("Result count:", safeRows.length);
+                console.log("Preview:", JSON.stringify(preview.slice(0, 5), null, 2));
+
+                return {
+                    success: true,
+                    searchType: type,
+                    searchTerm,
+                    filterQuery: payload.filterQuery,
+                    count: safeRows.length,
+                    returned: preview.length,
+                    rows: preview,
+                    preview,
+                    discoveredFields,
+                    answer
+                };
+            } catch (err) {
+                console.error("Search tool error:", err.message);
+                return {
+                    success: false,
+                    error: err.message,
+                    message: "Search service temporarily unavailable. Please try again later."
+                };
             }
-          }
-        */
-
-        const responseBody = flowResponse?.data || {};
-if (
-    type === "LOOKUPS" &&
-    Array.isArray(responseBody)
-) {
-    const lookupGroups = {};
-
-    responseBody.forEach(item => {
-        lookupGroups[item.type] =
-            item.load?.value || [];
-    });
-
-    return {
-        success: true,
-        searchType: type,
-        lookupGroups,
-        count: Object.keys(lookupGroups).length,
-        rows: lookupGroups
-    };
-}
-let rows = [];
-
-if (Array.isArray(responseBody)) {
-    rows = responseBody;
-} else if (Array.isArray(responseBody?.value)) {
-    rows = responseBody.value;
-} else if (Array.isArray(responseBody?.results?.value)) {
-    rows = responseBody.results.value;
-} else if (Array.isArray(responseBody?.data?.value)) {
-    rows = responseBody.data.value;
-} else if (Array.isArray(flowResponse?.value)) {
-    rows = flowResponse.value;
-}
-
-const safeRows = Array.isArray(rows) ? rows : [];
-
-console.log(
-    "ROWS LENGTH:",
-    Array.isArray(rows) ? rows.length : "NOT ARRAY"
-);
-        console.log(
-    "FIRST ROW:",
-    JSON.stringify(
-        safeRows[0],
-        null,
-        2
-    )
-);
-        const limit = Number(input.limit || input.top || 10);
-        const preview = safeRows.slice(0, limit);
-
-        let answer = "";
-
-        if (type === "CUSTOMER") {
-            answer = preview.length
-                ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
-                  preview.map((row, index) => {
-                      const name =
-                          row.CustomerName ||
-                          row.customerName ||
-                          row.Name ||
-                          row.name ||
-                          "Unknown customer";
-
-                      const branch =
-                          row.Branch ||
-                          row.branch ||
-                          row.BranchName ||
-                          row.branchName ||
-                          "Unknown branch";
-
-                      const customerNumber =
-                          row.CustomerNumber ||
-                          row.CustomerNo ||
-                          row.CustomerID ||
-                          row.CustomerId ||
-                          row.customerNumber ||
-                          "";
-
-                      return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
-                  }).join("\n")
-                : `No customer results found for "${searchTerm}".`;
-        } else {
-            answer = preview.length
-                ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
-                : `No results found for "${searchTerm}".`;
         }
-
-        console.log(`${config.flowName} succeeded`);
-        console.log("Result count:", safeRows.length);
-        console.log("Preview:", JSON.stringify(preview.slice(0, 5), null, 2));
-
-        return {
-            success: true,
-            searchType: type,
-            searchTerm,
-            filterQuery: payload.filterQuery,
-            count: safeRows.length,
-            returned: preview.length,
-            rows: preview,
-            preview,
-            answer
-        };
-
-    } catch (err) {
-        console.error("Search tool error:", err.message);
-
-        return {
-            success: false,
-            error: err.message,
-            message: "Search service temporarily unavailable. Please try again later."
-        };
-    }
-}
     };
 }
