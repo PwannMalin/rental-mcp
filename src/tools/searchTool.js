@@ -170,17 +170,24 @@ parameters: {
     required: ["type"]
 },
 
-           
+      
 
         async handler(input = {}) {
     try {
+
+        console.log(
+    "RAW INPUT:",
+    JSON.stringify(input, null, 2)
+);
         const type = String(
     input.type ||
     input.searchType ||
     input.SearchType ||
     ""
 ).trim().toUpperCase();
-
+console.log("RESOLVED TYPE:", type);
+console.log("INPUT TYPE:", input.type);
+console.log("INPUT SEARCHTYPE:", input.searchType);
         const config = SEARCH_TYPES[type];
 
         if (!config) {

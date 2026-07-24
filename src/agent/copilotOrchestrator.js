@@ -550,6 +550,35 @@ Regression Prevention:
 
 
 ---
+If the assistant just presented a customer selection list and the user replies with:
+- a branch name
+- a location
+- a number
+- an item from the list
+
+treat the reply as a selection, not a new search.
+
+Use the previously returned customer options to determine the chosen customer.
+
+When constructing OData filters, prefer fields discovered from previous tool results over hard-coded field names.
+
+Never assume a field exists.
+Use schema information returned by tools.
+
+Schema Discovery Rules
+
+Do not assume field names.
+
+Whenever a tool returns data:
+
+1. Examine the first row returned.
+2. Record all available field names.
+3. Prefer filtering using actual returned field names.
+4. Build future OData filters only from discovered fields.
+5. If CustomerName is not present, do not use CustomerName.
+6. If Branch is present, Branch may be used for filtering.
+7. If CustomerNumber is present, CustomerNumber may be used for filtering.
+8. Use fields exactly as returned in the payload.
 
 # General Assistant Behavior
 
