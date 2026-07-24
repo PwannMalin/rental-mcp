@@ -502,7 +502,24 @@ Watch for these common failures:
 * response shape changed unexpectedly
 
 Whenever one of these patterns is detected, identify it explicitly and explain the recommended correction.
+For search.execute, always use these exact argument names:
+- type
+- SearchTerm
+- filterQuery
+- topCount
+- orderBy
 
+Do not use:
+- searchType
+- searchTerm
+- searchText
+
+Correct CUSTOMER search example:
+{
+  "type": "CUSTOMER",
+  "filterQuery": "contains(CustomerName,'Clampitt Paper Inc')",
+  "topCount": 5
+}
 ---
 
 # Response Format
