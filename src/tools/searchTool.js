@@ -129,49 +129,48 @@ parameters: {
     type: "object",
     properties: {
         type: {
-           type: "string",
-enum: [
-"CUSTOMER",
-"EQUIPMENT",
-"MODEL",
-"RENTAL",
-"REQUEST_LINES",
-"LOOKUPS",
-"CUSTOMER_INFO"
-],
-description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
-},
+            type: "string",
+            enum: [
+                "CUSTOMER",
+                "EQUIPMENT",
+                "MODEL",
+                "RENTAL",
+                "REQUEST_LINES",
+                "LOOKUPS",
+                "CUSTOMER_INFO"
+            ],
+            description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
+        },
+
         SearchTerm: {
-           type: {
-    type: "string",
-    enum: [
-        "CUSTOMER",
-        "EQUIPMENT",
-        "MODEL",
-        "RENTAL",
-        "REQUEST_LINES",
-        "LOOKUPS",
-        "CUSTOMER_INFO"
-    ],
-    description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
-},
-SearchTerm: {
-    type: "string",
-    description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
-}
-,
+            type: "string",
+            description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
+        },
+
         field: {
             type: "string",
             description: "Specific field to search in for equipment or advanced searches."
         },
-        filterQuery: {
-    type: "string",
-    description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
-}
 
-            },
-            required: ["type"]
+        filterQuery: {
+            type: "string",
+            description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
         },
+
+        topCount: {
+            type: "number",
+            description: "Optional max number of rows to return."
+        },
+
+        orderBy: {
+            type: "string",
+            description: "Optional OData order by value, such as CustomerName desc. This must be text, not a number."
+        }
+    },
+    required: ["type"]
+},
+
+           
 
         async handler(input = {}) {
     try {
