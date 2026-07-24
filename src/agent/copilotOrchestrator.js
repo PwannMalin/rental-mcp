@@ -170,6 +170,37 @@ JSON.stringify(result, null, 2)
         return [{
             role: "system",
             content: `
+Issue Classification:
+Workflow routing validated
+
+Root Cause:
+Customer selection is now working.
+
+Evidence:
+The MCP successfully executed:
+
+{
+  "type": "RENTAL",
+  "filterQuery": "Customer eq '669007'"
+}
+
+The rental workflow returned:
+"value": []
+
+Next task:
+
+Determine whether RequestHeader uses:
+- Customer
+- CustomerNumber
+- InvoicingCustomer
+- another field
+
+Search RequestHeader without a filter and inspect the first row schema.
+
+Identify the field containing customer numbers.
+
+Then build rental filters using the actual field name.
+
 Stop working on schema-aware filtering.
 
 New issue classification:
