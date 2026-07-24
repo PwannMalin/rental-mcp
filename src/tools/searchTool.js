@@ -129,14 +129,37 @@ parameters: {
     type: "object",
     properties: {
         type: {
-            type: "string",
-            enum: ["CUSTOMER", "EQUIPMENT", "MODEL", "RENTAL", "REQUEST_LINES", "LOOKUPS", "CUSTOMER_INFO"],
-            description: "Type of search to perform. Use CUSTOMER for customer name or branch lookups."
-        },
+           type: "string",
+enum: [
+"CUSTOMER",
+"EQUIPMENT",
+"MODEL",
+"RENTAL",
+"REQUEST_LINES",
+"LOOKUPS",
+"CUSTOMER_INFO"
+],
+description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
+},
         SearchTerm: {
-            type: "string",
-            description: "The main search term, such as customer name, model, equipment, or rental request. For follow-up questions, reuse the prior search term if available."
-        },
+           type: {
+    type: "string",
+    enum: [
+        "CUSTOMER",
+        "EQUIPMENT",
+        "MODEL",
+        "RENTAL",
+        "REQUEST_LINES",
+        "LOOKUPS",
+        "CUSTOMER_INFO"
+    ],
+    description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
+},
+SearchTerm: {
+    type: "string",
+    description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
+}
+,
         field: {
             type: "string",
             description: "Specific field to search in for equipment or advanced searches."
@@ -152,7 +175,13 @@ parameters: {
 
         async handler(input = {}) {
     try {
-        const type = String(input.type || "").trim().toUpperCase();
+        const type = String(
+    input.type ||
+    input.searchType ||
+    input.SearchType ||
+    ""
+).trim().toUpperCase();
+
         const config = SEARCH_TYPES[type];
 
         if (!config) {
@@ -162,9 +191,11 @@ parameters: {
             };
         }
 
-        const searchTerm =
+    const searchTerm =
     input.SearchTerm ||
     input.searchTerm ||
+    input.searchText ||
+    input.SearchText ||
     input.query ||
     "";
 
