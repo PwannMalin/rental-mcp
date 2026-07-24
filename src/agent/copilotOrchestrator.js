@@ -11,7 +11,35 @@ export class CopilotOrchestrator {
     context,
     ui
 ) {
-    return null;
+    if (!this.pendingCustomerSelection) {
+        return null;
+    }
+
+    const value = String(userInput).trim();
+
+    const match =
+        this.pendingCustomerSelection.options.find(
+            c =>
+                c.customerNumber === value ||
+                c.branch?.toLowerCase() === value.toLowerCase()
+        );
+
+    if (!match) {
+        return null;
+    }
+
+    this.pendingCustomerSelection = null;
+
+    return await this.registry.execute(
+        "search.execute",
+        {
+            type: "RENTAL",
+            filterQuery:
+                `Customer eq '${match.customerNumber}'`,
+            topCount: 10
+        },
+        context
+    );
 }
 
     async runStreaming(userInput, context = {}, ui) {
