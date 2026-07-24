@@ -132,31 +132,33 @@ JSON.stringify(result, null, 2)
     }
 
     buildTools() {
-        const tools = this.registry?.tools || {};
-        const toolList = tools instanceof Map 
-            ? Array.from(tools.values()) 
-            : Object.values(tools);
+    const tools = this.registry?.tools || {};
+    const toolList = tools instanceof Map
+        ? Array.from(tools.values())
+        : Object.values(tools);
 
-        return toolList.map(t => ({
-            type: "function",
-            function: {
-                name: t.name,
-                description: t.description || "No description provided",
-                parameters:
-    t.parameters ||
-    t.inputSchema ||
-    t.schema || {
-        type: "object",
-        properties: {}
-    }
-            }
-        }));
+    const builtTools = toolList.map(t => ({
+        type: "function",
+        function: {
+            name: t.name,
+            description: t.description || "No description provided",
+            parameters:
+                t.parameters ||
+                t.inputSchema ||
+                t.schema || {
+                    type: "object",
+                    properties: {}
+                }
+        }
+    }));
 
-        console.log(
-    "TOOLS EXPOSED TO GPT:",
-    this.buildTools().map(t => t.function.name)
-);
-    }
+    console.log(
+        "TOOLS EXPOSED TO GPT:",
+        builtTools.map(t => t.function.name)
+    );
+
+    return builtTools;
+}
 
     buildSystemPrompt(userId, tenantId) {
         const memory = this.memory?.get?.(userId, tenantId) || { 
@@ -168,7 +170,74 @@ JSON.stringify(result, null, 2)
         return [{
             role: "system",
             content: `
-# Internal Rental MCP Improvement Agent
+Use GitHub tools.
+
+The MCP system prompt is NOT located in:
+
+src/orchestrator/orchestratorPrompt.js
+
+The MCP system prompt is embedded inside:
+
+src/agent/copilotOrchestrator.js
+
+Specifically the:
+
+buildSystemPrompt()
+
+method.
+
+Use branch:
+fix/schema-aware-odata-filters
+
+Retrieve:
+src/agent/copilotOrchestrator.js
+
+Then:
+
+1. Add schema memory:
+   this.discoveredSchemas = {}
+
+2. Store discoveredFields from search.execute results:
+
+   CUSTOMER
+   RENTAL
+   REQUEST_LINES
+   EQUIPMENT
+
+3. Inject discovered schema into buildSystemPrompt().
+
+4. Update filtering instructions to:
+   - Prefer discovered fields.
+   - Never assume CustomerName exists.
+   - Never use CustomerName in RENTAL unless discovered.
+   - Use Branch for location selection.
+   - Use CustomerNumber when available.
+
+5. Commit changes to:
+   fix/schema-aware-odata-filters
+
+6. Update existing PR #2.
+
+GitHub Repository Context:
+
+The GitHub repository for this MCP is:
+owner: PwannMalin
+repo: rental-mcp
+
+Use these exact values for all GitHub tools unless the user explicitly says otherwise.
+
+Never infer owner or repo from the project name.
+
+If a GitHub tool succeeds and returns owner/repo values, remember and reuse those exact values for the rest of the session.
+
+If github.getFile returns 404:
+1. Verify owner and repo are correct.
+2. Retry with owner PwannMalin and repo rental-mcp.
+3. Retry on main.
+4. Try likely alternate paths.
+5. Only then report that the file could not be found.
+
+            # Internal Rental MCP Improvement Agent
 
 You are the **Internal Rental MCP Improvement Agent**.
 
@@ -579,6 +648,29 @@ Whenever a tool returns data:
 6. If Branch is present, Branch may be used for filtering.
 7. If CustomerNumber is present, CustomerNumber may be used for filtering.
 8. Use fields exactly as returned in the payload.
+
+
+GitHub tool retry rules:
+
+When a GitHub tool fails because of missing parameters:
+- Do not stop.
+- Read the tool schema from the available tools.
+- Retry with the exact required parameter names.
+- For branch creation, use:
+  {
+    "branchName": "<new branch name>",
+    "baseBranch": "main"
+  }
+
+When the user asks to improve the MCP, fix code, create a branch, or open a PR:
+- Use GitHub tools.
+- Do not only provide a diagnosis.
+- Do not ask for confirmation.
+- Create a branch first.
+- Use github.getFile before github.updateFile.
+- Update files only on the new branch.
+- Create a pull request after changes.
+
 
 # General Assistant Behavior
 

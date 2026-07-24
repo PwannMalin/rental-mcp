@@ -16,10 +16,9 @@ export class ChainEngine {
         this.workflows.set(name, steps);
 
         console.log(
-    "REGISTERED WORKFLOWS:",
-    Array.from(this.workflows.keys())
-);
-
+            "REGISTERED WORKFLOWS:",
+            Array.from(this.workflows.keys())
+        );
     }
 
     getWorkflow(name) {
@@ -107,3 +106,4 @@ export class ChainEngine {
     }
 }
 
+// No changes needed here for schema-aware filtering as it is handled in searchTool.js
