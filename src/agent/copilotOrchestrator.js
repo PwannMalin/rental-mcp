@@ -223,12 +223,25 @@ export class CopilotOrchestrator {
                         try {
                             console.log("Calling tool:", toolName);
                             console.log("Arguments:", args);
+                            console.log("TOOL NAME:", toolName);
                             result = await this.registry.execute(toolName, args, context);
+                            console.log(
+    "ACTIVE REQUEST AFTER TOOL:",
+    JSON.stringify(this.activeRequest, null, 2)
+);
 
                             // Remember active request if tool call is search.execute and type is RENTAL
-                            if (toolName === "search.execute" && args.type === "RENTAL" && result.success) {
-                                this.rememberActiveRequest(result, args, context);
-                            }
+                           const looksLikeRentalResult =
+    result?.data?.searchType === "RENTAL" ||
+    result?.searchType === "RENTAL";
+
+if (looksLikeRentalResult && result.success) {
+    this.rememberActiveRequest(
+        result,
+        args,
+        context
+    );
+}
 
                             if (
                                 result?.requiresSelection &&
