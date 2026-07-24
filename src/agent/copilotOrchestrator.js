@@ -285,10 +285,37 @@ export class CopilotOrchestrator {
                         const toolName = call.function.name;
                         await ui.update(`Using: ${toolName}`);
 
-                        let args = {};
-                        try {
-                            args = JSON.parse(call.function.arguments || "{}");
-                        } catch (e) {}
+                       let args = {};
+try {
+    args = JSON.parse(call.function.arguments || "{}");
+} catch (e) {
+    args = {};
+}
+
+// Normalize common LLM argument aliases before tool execution
+if (toolName === "search.execute") {
+    args.type = String(
+        args.type ||
+        args.searchType ||
+        args.SearchType ||
+        ""
+    ).trim().toUpperCase();
+
+    args.SearchTerm =
+        args.SearchTerm ||
+        args.searchTerm ||
+        args.searchText ||
+        args.SearchText ||
+        args.query ||
+        "";
+
+    if (!args.type) {
+        console.warn(
+            "search.execute called without type:",
+            JSON.stringify(args, null, 2)
+        );
+    }
+}
 
                         let result;
 
@@ -296,27 +323,62 @@ export class CopilotOrchestrator {
                             console.log("Calling tool:", toolName);
                             console.log("Arguments:", args);
 
-                            result = await this.registry.execute(toolName, args, context);
+                         result = await this.registry.execute(toolName, args, context);
 
-                            // Capture schema when possible
-                            if (result?.success) {
-                                const type = args?.type?.toUpperCase();
-                                if (type && this.discoveredSchemas.hasOwnProperty(type)) {
-                                    this.captureSchema(type, result);
-                                }
-                            }
+// Capture schema when possible
+if (result?.success) {
+    const type = String(args?.type || "").toUpperCase();
 
-                            const looksLikeRentalResult =
-                                result?.data?.searchType === "RENTAL" ||
-                                result?.searchType === "RENTAL" ||
-                                args?.type === "RENTAL";
+    if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+        this.captureSchema(type, result);
+    }
+}
 
-                            if (looksLikeRentalResult && result.success) {
-                                this.rememberActiveRequest(result, args, context);
-                            }
+// Store pending customer selection from normal CUSTOMER search results
+const normalizedType = String(args?.type || "").toUpperCase();
+const rows = this.getRowsFromToolResult(result);
 
-                            // Handle multi-customer selection
-                            if (result?.requiresSelection && result?.options?.length) {
+if (
+    toolName === "search.execute" &&
+    normalizedType === "CUSTOMER" &&
+    rows.length > 1
+) {
+    this.pendingCustomerSelection = {
+        options: rows.map(row => ({
+            CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
+            Branch: this.getCleanValue(row.Branch || row.branch),
+            customerName: this.getCleanValue(
+                row.CustomerName ||
+                row.customerName ||
+                row.Name ||
+                row.name
+            )
+        }))
+    };
+
+    console.log(
+        "PENDING CUSTOMER SELECTION SET:",
+        JSON.stringify(this.pendingCustomerSelection, null, 2)
+    );
+}
+
+// Remember active rental request
+const looksLikeRentalResult =
+    result?.data?.searchType === "RENTAL" ||
+    result?.searchType === "RENTAL" ||
+    normalizedType === "RENTAL";
+
+if (looksLikeRentalResult && result.success) {
+    this.rememberActiveRequest(result, args, context);
+}
+
+console.log(
+    "ACTIVE REQUEST AFTER TOOL:",
+    JSON.stringify(this.activeRequest, null, 2)
+);
+
+// Handle older tools that explicitly return requiresSelection
+if (result?.requiresSelection && result?.options?.length) {
                                 this.pendingCustomerSelection = {
                                     options: result.options.map(c => ({
                                         CustomerNumber: c.customerNumber || c.CustomerNumber,
