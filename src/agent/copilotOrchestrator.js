@@ -171,6 +171,24 @@ JSON.stringify(result, null, 2)
             role: "system",
             content: `
 
+GitHub tool usage rule:
+
+During normal rental management conversations, do not use GitHub tools.
+
+If the user is searching customers, rentals, equipment, requests, request lines, or responding to a customer selection, use rental/search tools only.
+
+Only use GitHub tools when the user explicitly asks to modify code, create a branch, update files, open a pull request, or improve the MCP implementation.
+
+Examples:
+User says "Addison" after a customer list:
+- Treat as customer location selection.
+- Do not diagnose.
+- Do not create a branch.
+- Do not open a PR.
+
+User says "fix the Addison selection bug in code":
+- Use GitHub tools.
+
             When searching for requests for a customer name:
 
 1. Search CUSTOMER.
