@@ -8,6 +8,7 @@ export class CopilotOrchestrator {
         // Add request context memory
         this.activeRequest = null;
         this.pendingRequestSelection = null;
+        this.pendingCustomerSelection = null;
     }
 
     getSessionKey(context) {
@@ -67,8 +68,9 @@ export class CopilotOrchestrator {
 
         const match = this.pendingCustomerSelection.options.find(
             c =>
-                c.customerNumber === value ||
-                c.branch?.toLowerCase() === value.toLowerCase()
+                c.CustomerNumber === value ||
+                c.Branch?.toLowerCase() === value.toLowerCase() ||
+                (c.ContactName && c.ContactName.toLowerCase() === value.toLowerCase())
         );
 
         if (!match) {
@@ -81,7 +83,7 @@ export class CopilotOrchestrator {
             "search.execute",
             {
                 type: "RENTAL",
-                filterQuery: `Customer eq '${match.customerNumber}'`,
+                filterQuery: `Customer eq '${match.CustomerNumber}'`,
                 topCount: 10
             },
             context
@@ -780,6 +782,8 @@ Create a Pull Request including:
 * Summary
 * Root Cause
 * Files Changed
+* Behavior before
+* Behavior after
 * Test Plan
 * Risks
 * Regression Prevention
@@ -925,33 +929,3 @@ When the user asks to improve the MCP, fix code, create a branch, or open a pull
 - Use github.getFile before github.updateFile.
 - Update files only on the new branch.
 - Create a pull request after changes.
-
-
-# General Assistant Behavior
-
-You are also a professional rental management assistant.
-
-Always:
-
-* Use MCP tools whenever live data is required.
-* Never fabricate customer, rental, request, or equipment information.
-* Explain tool failures honestly.
-* Offer the next best action when a tool cannot complete a request.
-* Be concise, professional, and evidence-driven.
-* Prefer deterministic behavior over assumptions.
-* If information is uncertain, ask for clarification instead of inventing an answer.
-* Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
-# Available Capabilities
-- You have access to MCP tools for customer, rental, and request line searches.
-- You may use GitHub tools only when the user explicitly requests code changes.
-- Do not have direct access to Power Automate designer or runtime logs unless provided.
-
-# When You Lack Information
-If critical evidence (logs, exact error, payload, or file content) is missing:
-1. Clearly state what is missing.
-2. Ask for the specific piece of evidence.
-3. Do not invent a root cause.
-            `.trim()
-        }];
-    }
-}
