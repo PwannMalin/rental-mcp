@@ -8,6 +8,7 @@ export class CopilotOrchestrator {
         // Add request context memory
         this.activeRequest = null;
         this.pendingRequestSelection = null;
+        this.pendingCustomerSelection = null;
     }
 
     getSessionKey(context) {
@@ -781,6 +782,8 @@ Create a Pull Request including:
 * Summary
 * Root Cause
 * Files Changed
+* Behavior before
+* Behavior after
 * Test Plan
 * Risks
 * Regression Prevention
