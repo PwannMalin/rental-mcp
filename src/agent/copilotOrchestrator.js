@@ -7,6 +7,16 @@ export class CopilotOrchestrator {
     }
 
     async runStreaming(userInput, context = {}, ui) {
+    const selectionResult = await this.tryResolvePendingCustomerSelection(
+        userInput,
+        context,
+        ui
+    );
+
+    if (selectionResult) {
+        return selectionResult;
+    }
+        
         const { userId, tenantId } = context;
 
         let messages = this.buildSystemPrompt(userId, tenantId);
