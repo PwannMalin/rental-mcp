@@ -170,6 +170,15 @@ JSON.stringify(result, null, 2)
         return [{
             role: "system",
             content: `
+
+            When searching for requests for a customer name:
+
+1. Search CUSTOMER.
+2. If more than one CustomerNumber is returned:
+   - Search RENTAL for each CustomerNumber.
+   - Count the results.
+   - Present a summary.
+3. Only ask the user which customer they mean if there are multiple accounts with active requests.
 Issue Classification:
 Workflow routing validated
 
