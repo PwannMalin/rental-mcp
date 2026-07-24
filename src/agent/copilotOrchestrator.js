@@ -6,8 +6,17 @@ export class CopilotOrchestrator {
         this.maxSteps = 10;
     }
 
+    async tryResolvePendingCustomerSelection(
+    userInput,
+    context,
+    ui
+) {
+    return null;
+}
+
     async runStreaming(userInput, context = {}, ui) {
-    const selectionResult = await this.tryResolvePendingCustomerSelection(
+    
+        const selectionResult = await this.tryResolvePendingCustomerSelection(
         userInput,
         context,
         ui
