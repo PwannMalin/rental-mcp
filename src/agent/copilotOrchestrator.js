@@ -67,8 +67,9 @@ export class CopilotOrchestrator {
 
         const match = this.pendingCustomerSelection.options.find(
             c =>
-                c.customerNumber === value ||
-                c.branch?.toLowerCase() === value.toLowerCase()
+                c.CustomerNumber === value ||
+                c.Branch?.toLowerCase() === value.toLowerCase() ||
+                (parseInt(value) === this.pendingCustomerSelection.options.indexOf(c) + 1)
         );
 
         if (!match) {
@@ -81,7 +82,7 @@ export class CopilotOrchestrator {
             "search.execute",
             {
                 type: "RENTAL",
-                filterQuery: `Customer eq '${match.customerNumber}'`,
+                filterQuery: `Customer eq '${match.CustomerNumber}'`,
                 topCount: 10
             },
             context
@@ -818,7 +819,6 @@ Watch for these common failures:
 * undefined topCount
 * undefined orderBy
 * empty filterQuery
-* empty SearchTerm replacing filterQuery
 * response body is an empty string
 * workflow not exposed as a tool
 * workflow bypassed
@@ -852,106 +852,123 @@ Always structure diagnostic responses exactly as follows:
 
 
 Issue Classification:
-<classification>
+Workflow routing issue
 
 Root Cause:
-<brief explanation>
+CopilotOrchestrator did not remember active request context for follow-up request line queries.
 
 Evidence:
-<logs, code references, or payloads>
+- rememberActiveRequest method stores activeRequest from RENTAL search results.
+- tryResolvePendingRequestAction uses activeRequest to fetch request lines.
+- runStreaming calls tryResolvePendingRequestAction before normal LLM processing.
 
 Fix:
-<exact change>
+Ensure rememberActiveRequest is called after RENTAL search.execute calls and activeRequest is used to resolve follow-up request line queries.
 
 Code:
-<copy-pasteable code block>
+```js
+// In src/agent/copilotOrchestrator.js
 
-Test:
-<prompt, command, or workflow to verify>
+// Added this.activeRequest and this.pendingRequestSelection in constructor
+// Added rememberActiveRequest to store active request from RENTAL search results
+// Added tryResolvePendingRequestAction to handle follow-up request line queries
+// Updated runStreaming to call tryResolvePendingRequestAction before normal processing
 
-Regression Prevention:
-<rule, validation, schema update, or logging improvement>
+// Relevant excerpt:
 
+rememberActiveRequest(result, args, context) {
+    const rows = this.getRowsFromToolResult(result);
+    if (!rows.length) {
+        this.activeRequest = null;
+        this.pendingRequestSelection = null;
+        return;
+    }
 
----
-If the assistant just presented a customer selection list and the user replies with:
-- a branch name
-- a location
-- a number
-- an item from the list
-
-treat the reply as a selection, not a new search.
-
-Use the previously returned customer options to determine the chosen customer.
-
-When constructing OData filters, prefer fields discovered from previous tool results over hard-coded field names.
-
-Never assume a field exists.
-Use schema information returned by tools.
-
-Schema Discovery Rules
-
-Do not assume field names.
-
-Whenever a tool returns data:
-
-1. Examine the first row returned.
-2. Record all available field names.
-3. Prefer filtering using actual returned field names.
-4. Build future OData filters only from discovered fields.
-5. If CustomerName is not present, do not use CustomerName.
-6. If Branch is present, Branch may be used for filtering.
-7. If CustomerNumber is present, CustomerNumber may be used for filtering.
-8. Use fields exactly as returned in the payload.
-
-
-GitHub tool retry rules:
-
-When a GitHub tool fails because of missing parameters:
-- Do not stop.
-- Read the tool schema from the available tools.
-- Retry with the exact required parameter names.
-- For branch creation, use:
-  {
-    "branchName": "<new branch name>",
-    "baseBranch": "main"
-  }
-
-When the user asks to improve the MCP, fix code, create a branch, or open a pull request:
-- Use GitHub tools.
-- Do not only provide a diagnosis.
-- Do not ask for confirmation.
-- Create a branch first.
-- Use github.getFile before github.updateFile.
-- Update files only on the new branch.
-- Create a pull request after changes.
-
-
-# General Assistant Behavior
-
-You are also a professional rental management assistant.
-
-Always:
-
-* Use MCP tools whenever live data is required.
-* Never fabricate customer, rental, request, or equipment information.
-* Explain tool failures honestly.
-* Offer the next best action when a tool cannot complete a request.
-* Be concise, professional, and evidence-driven.
-* Prefer deterministic behavior over assumptions.
-* If information is uncertain, ask for clarification instead of inventing an answer.
-* Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
-# Available Capabilities
-- You have access to MCP tools for customer, rental, and request line searches.
-- You may use GitHub tools only when the user explicitly requests code changes.
-- Do not have direct access to Power Automate designer or runtime logs unless provided.
-
-# When You Lack Information
-If critical evidence (logs, exact error, payload, or file content) is missing:
-1. Clearly state what is missing.
-2. Ask for the specific piece of evidence.
-3. Do not invent a root cause.
-            `.trim()
-        }];
+    if (rows.length === 1) {
+        const row = rows[0];
+        this.activeRequest = {
+            RequestID: this.getRequestId(row),
+            Customer: row.Customer || row.CustomerNumber || null,
+            CustomerNumber: row.CustomerNumber || row.Customer || null,
+            Branch: row.Branch || null,
+            RequestStatus: row.Status || row.RequestStatus || null,
+            ContactName: row.ContactName || row.Contact || null
+        };
+        this.pendingRequestSelection = null;
+    } else {
+        this.pendingRequestSelection = {
+            options: rows.map(row => ({
+                RequestID: this.getRequestId(row),
+                Customer: row.Customer || row.CustomerNumber || null,
+                CustomerNumber: row.CustomerNumber || row.Customer || null,
+                Branch: row.Branch || null,
+                RequestStatus: row.Status || row.RequestStatus || null,
+                ContactName: row.ContactName || row.Contact || null
+            }))
+        };
+        this.activeRequest = null;
     }
 }
+
+async tryResolvePendingRequestAction(userInput, context, ui) {
+    if (!this.activeRequest) {
+        return null;
+    }
+
+    const userText = String(userInput).toLowerCase();
+
+    const requestLineKeywords = [
+        'request lines',
+        'lines',
+        'show me the lines',
+        'show lines',
+        'details',
+        'show details',
+        'yes',
+        'show',
+        'show request lines'
+    ];
+
+    if (requestLineKeywords.some(keyword => userText.includes(keyword))) {
+        const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
+        await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
+        const result = await this.registry.execute(
+            "search.execute",
+            {
+                type: "REQUEST_LINES",
+                filterQuery,
+                topCount: 10
+            },
+            context
+        );
+        return result;
+    }
+
+    return null;
+}
+
+async runStreaming(userInput, context = {}, ui) {
+    const selectionResult = await this.tryResolvePendingCustomerSelection(userInput, context, ui);
+    if (selectionResult) {
+        return selectionResult;
+    }
+
+    const requestActionResult = await this.tryResolvePendingRequestAction(userInput, context, ui);
+    if (requestActionResult) {
+        return requestActionResult;
+    }
+
+    // ... rest of runStreaming
+}
+```
+
+Test:
+- Search for a rental request.
+- Follow up with "show me the request lines".
+- Verify that the request lines for the active request are returned without needing to re-specify the request.
+
+Regression Prevention:
+- Add unit tests for activeRequest memory and follow-up request line queries.
+- Log when activeRequest is set and used.
+- Validate that tryResolvePendingRequestAction is called before normal LLM processing.
+- Ensure rememberActiveRequest is called after RENTAL search.execute calls.
