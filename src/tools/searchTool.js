@@ -110,7 +110,19 @@ export function searchTool() {
     return {
         name: "search.execute",
 
-        description: "Powerful search across customers, rentals, equipment, models and related data.",
+        description: ` Search across customers, rentals, equipment, models, request lines, lookup values, and customer info.
+
+Important:
+- Use CUSTOMER for customer names.
+- Use RENTAL only for rental request headers.
+- Do not search RENTAL by CustomerName.
+- Customer rental lookup flow is:
+  1. CUSTOMER search by contains(CustomerName,'name')
+  2. Extract CustomerNumber
+  3. RENTAL search by Customer eq 'CustomerNumber'
+- Preserve filterQuery exactly when provided.
+- Use REQUEST_LINES with RequestID to retrieve request lines.
+`,
 
         
 parameters: {
@@ -131,7 +143,7 @@ parameters: {
         },
         filterQuery: {
     type: "string",
-    description: "Custom OData filter. For CUSTOMER searches, prefer contains(CustomerName,'name') instead of CustomerName eq 'name' unless an exact match is required."
+    description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
 }
 
             },
