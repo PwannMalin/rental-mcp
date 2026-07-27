@@ -226,10 +226,15 @@ const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm
 
 // ===== MOVE THIS BLOCK HERE =====
 // Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
+// Auto-build filter for CUSTOMER_INFO
 if (type === "CUSTOMER_INFO") {
-    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+    const customerNumber = 
+        input.CustomerNumber || 
+        input.customerNumber || 
+        input.CustomerNo ||
+        input.SearchTerm;          // fallback
 
-    if (customerNumber && !input.filterQuery && !searchTerm) {
+    if (customerNumber && !input.filterQuery) {
         input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
     }
 }
@@ -339,23 +344,37 @@ if (type === "CUSTOMER_INFO") {
                     discoveredFields = Object.keys(preview[0]);
                 }
 
-                let answer = "";
+               let answer = "";
 
-                if (type === "CUSTOMER") {
-                    answer = preview.length
-                        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
-                          preview.map((row, index) => {
-                              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
-                              const branch = row.Branch || row.branch || row.BranchName || row.branchName || "Unknown branch";
-                              const customerNumber = row.CustomerNumber || row.CustomerNo || row.CustomerID || row.CustomerId || row.customerNumber || "";
-                              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
-                          }).join("\n")
-                        : `No customer results found for "${searchTerm}".`;
-                } else {
-                    answer = preview.length
-                        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
-                        : `No results found for "${searchTerm}".`;
-                }
+if (type === "CUSTOMER") {
+    answer = preview.length
+        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
+          preview.map((row, index) => {
+              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
+              const branch = row.Branch || row.branch || "Unknown branch";
+              const customerNumber = row.CustomerNumber || row.CustomerNo || row.customerNumber || "";
+              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
+          }).join("\n")
+        : `No customer results found for "${searchTerm}".`;
+
+} else if (type === "CUSTOMER_INFO") {
+    answer = preview.length
+        ? `Found ${safeRows.length} delivery/door record(s):\n` +
+          preview.map((row, index) => {
+              const height = row.DeliveryDoorHeightInches ?? "—";
+              const dock = row.hasDock ? "Yes" : "No";
+              const ramp = row.hasRamp ? "Yes" : "No";
+              const ground = row.hasGround ? "Yes" : "No";
+              const contact = row.RentalContactName || "";
+              return `${index + 1}. Customer ${row.CustomerNumber} — Door Height: ${height}" | Dock: ${dock} | Ramp: ${ramp} | Ground: ${ground}${contact ? ` | Contact: ${contact}` : ""}`;
+          }).join("\n")
+        : `No delivery/door information found.`;
+
+} else {
+    answer = preview.length
+        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
+        : `No results found for "${searchTerm}".`;
+}
 
                 console.log(`${config.flowName} succeeded`);
                 console.log("Result count:", safeRows.length);
