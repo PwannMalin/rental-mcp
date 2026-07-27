@@ -63,6 +63,38 @@ function buildContainsFilter(field, value) {
     return `contains(${field},'${escapeOData(value)}')`;
 }
 
+function validateSearchInput(input) {
+    const type = String(input.type || "").toUpperCase();
+
+    if (!type) {
+        return {
+            success: false,
+            error: "Search type is required."
+        };
+    }
+
+    if (!SEARCH_TYPES[type]) {
+        return {
+            success: false,
+            error: `Unsupported search type: ${type}`
+        };
+    }
+
+    if (
+        type === "REQUEST_LINES" &&
+        !input.filterQuery &&
+        !input.SearchTerm
+    ) {
+        return {
+            success: false,
+            error:
+              "REQUEST_LINES requires SearchTerm or filterQuery."
+        };
+    }
+
+    return null;
+}
+
 function buildFilter(type, searchTerm, input = {}) {
     const term = String(searchTerm || "").trim();
 
@@ -171,6 +203,12 @@ Important:
 
                 const type = String(input.type || input.searchType || input.SearchType || "").trim().toUpperCase();
                 console.log("RESOLVED TYPE:", type);
+                const validationError =
+    validateSearchInput(input);
+
+if (validationError) {
+    return validationError;
+}
 
                 const config = SEARCH_TYPES[type];
 
