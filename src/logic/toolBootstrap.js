@@ -137,27 +137,11 @@ console.log(
             filterQuery:
                 input.filterQuery ||
                 (
-
-requestId
-
-? `RequestID eq ${Number(requestId)}`
-
-: undefined
-
-)
+                    requestId
+                    ? `RequestID eq ${Number(requestId)}`
+                    : undefined
+                )
         });
-
-        console.log(
-    "REQUEST_LINES WRAPPER INPUT:",
-    JSON.stringify(input, null, 2)
-);
-
-console.log(
-    "REQUEST_LINES FILTER:",
-    requestId
-        ? `RequestID eq '${requestId}'`
-        : input.filterQuery
-);
     }
 },
             {
