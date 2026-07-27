@@ -539,6 +539,29 @@ export class CopilotOrchestrator {
             {
                 role: "system",
                 content: `
+
+                ### Critical Tool Rule for search.execute
+
+When calling "search.execute" you **must** always include the "type" parameter.
+
+Valid values:
+- CUSTOMER
+- RENTAL
+- REQUEST_LINES
+- EQUIPMENT
+
+Never call search.execute with only a filterQuery.
+
+Correct example:
+{
+  "type": "CUSTOMER",
+  "filterQuery": "contains(CustomerName,'Clampitt Paper')"
+}
+
+Incorrect example:
+{
+  "filterQuery": "contains(CustomerName,'Clampitt Paper')"
+}
 # Internal Rental MCP Improvement Agent
 
 You are the **Internal Rental MCP Improvement Agent**.
