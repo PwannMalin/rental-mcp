@@ -193,7 +193,12 @@ export class CopilotOrchestrator {
             this.captureSchema("REQUEST_LINES", result);
 
             const rows = this.getRowsFromToolResult(result);
-
+if (!rows.length) {
+    return {
+        success: true,
+        answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+    };
+}
             return {
                 success: true,
                 answer: rows.length
