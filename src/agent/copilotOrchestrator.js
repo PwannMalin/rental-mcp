@@ -102,77 +102,120 @@ export class CopilotOrchestrator {
         }
     }
 
- async tryResolvePendingCustomerSelection(userInput, context, ui) {
-    if (!this.pendingCustomerSelection?.options?.length) {
+async tryResolvePendingRequestAction(userInput, context, ui) {
+    if (!this.activeRequest) {
         return null;
     }
 
-    const value = this.getCleanValue(userInput);
+    const userText = this.getCleanValue(userInput).toLowerCase();
 
-    const match = this.pendingCustomerSelection.options.find((c, index) => {
-        const customerNumber = this.getCleanValue(c.CustomerNumber);
-        const branch = this.getCleanValue(c.Branch).toLowerCase();
+    // Keywords that should trigger showing request lines
+    const showLinesKeywords = [
+        "request lines",
+        "rental request lines",
+        "lines",
+        "show me the lines",
+        "show lines",
+        "can i get the rental request lines",
+        "request details",
+        "details",
+        "yes more details",
+        "what equipment",
+        "equipment",
+        "show the full line",
+        "full line",
+        "more details",
+        "full details",
+        "expand",
+        "show everything"
+    ];
 
-        return (
-            customerNumber === value ||
-            branch === value.toLowerCase() ||
-            parseInt(value) === index + 1
-        );
-    });
+    const wantsLines = showLinesKeywords.some(keyword => userText.includes(keyword));
 
-    if (!match) {
-        console.log("No match found for pending customer selection:", value);
+    if (!wantsLines) {
         return null;
     }
 
-    // Clear only after successful match
-    this.pendingCustomerSelection = null;
+    // If we already fetched the lines earlier in this session, reuse them
+    if (this.activeRequest.lines && this.activeRequest.lines.length > 0) {
+        return this.formatRequestLinesAnswer(this.activeRequest.lines, userText);
+    }
 
-    console.log("Matched customer:", match);
+    // Otherwise fetch them
+    const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
+
+    await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
 
     const result = await this.registry.execute(
         "search.execute",
         {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 10
+            type: "REQUEST_LINES",
+            filterQuery,
+            topCount: 20
         },
         context
     );
 
-   const rows = this.getRowsFromToolResult(result);
+    this.captureSchema("REQUEST_LINES", result);
 
-if (!rows.length) {
+    const rows = this.getRowsFromToolResult(result);
+
+    // Store the lines on the active request so follow-ups work
+    this.activeRequest.lines = rows;
+
+    return this.formatRequestLinesAnswer(rows, userText);
+}
+
+/**
+ * Formats the request lines into a readable answer.
+ * Shows more detail when the user asks for "full" or "more details".
+ */
+formatRequestLinesAnswer(rows, userText = "") {
+    if (!rows || rows.length === 0) {
+        return {
+            success: true,
+            answer: `I found RequestID ${this.activeRequest.RequestID}, but there are no request lines for it.`
+        };
+    }
+
+    const wantsFull = 
+        userText.includes("full") || 
+        userText.includes("more details") || 
+        userText.includes("expand") ||
+        userText.includes("everything");
+
+    const linesText = rows.map((row, index) => {
+        const description =
+            row.Line_Description ||
+            row.Description ||
+            row.EquipModel ||
+            row.Model ||
+            row.ItemDescription ||
+            "No description";
+
+        const quantity = row.Quantity || row.Qty || row.RequestedQuantity || "";
+        const serial = row.SerialNumber || row.Serial || row.SerialNo || "";
+        const model = row.Model || row.EquipModel || row.ModelNumber || "";
+        const status = row.LineStatus || row.Status || "";
+
+        if (wantsFull) {
+            // Full detail version
+            return (
+                `${index + 1}. ${description}\n` +
+                `   Model: ${model || "—"} | Qty: ${quantity || "—"} | Serial: ${serial || "—"}\n` +
+                `   Status: ${status || "—"}`
+            );
+        }
+
+        // Normal short version
+        return `${index + 1}. ${description}${quantity ? ` — Qty: ${quantity}` : ""}${serial ? ` — Serial: ${serial}` : ""}`;
+    }).join("\n\n");
+
     return {
         success: true,
-        answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+        answer: `Found ${rows.length} request line(s) for RequestID ${this.activeRequest.RequestID}:\n\n${linesText}`
     };
 }
-
-// We have results – remember the active request
-if (result?.success) {
-    this.rememberActiveRequest(result, {
-        type: "RENTAL",
-        filterQuery: `Customer eq '${match.CustomerNumber}'`,
-        topCount: 10
-    }, context);
-
-    this.captureSchema("RENTAL", result);
-}
-
-// Build a nice response for the user
-const requestList = rows.map((row, index) => {
-    const id = this.getRequestId(row);
-    const status = this.getCleanValue(row.RequestStatus || row.Status);
-    const contact = this.getCleanValue(row.ContactName || row.Contact);
-    return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-}).join("\n");
-
-return {
-    success: true,
-    answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`
-};
- }
 
   async tryResolvePendingRequestAction(userInput, context, ui) {
     if (!this.activeRequest) {
