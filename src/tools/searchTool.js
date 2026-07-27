@@ -141,7 +141,19 @@ export function searchTool() {
 
         description: ` Search across customers, rentals, equipment, models, request lines, lookup values, and customer info.
 
+Valid values for "type":
+- CUSTOMER
+- EQUIPMENT
+- MODEL
+- RENTAL
+- REQUEST_LINES
+- LOOKUPS
+- CUSTOMER_INFO          ← for door height / delivery info
+
 Important:
+- Use CUSTOMER for customer names or customer numbers when you only need basic info.
+- Use CUSTOMER_INFO when you need door height, dock, ramp, or delivery information.
+- For CUSTOMER_INFO always pass a filterQuery like: CustomerNumber eq '9045180'
 - Use CUSTOMER for customer names.
 - Use RENTAL only for rental request headers.
 - Do not search RENTAL by CustomerName.
