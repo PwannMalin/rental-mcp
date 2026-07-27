@@ -101,6 +101,77 @@ export class CopilotOrchestrator {
             this.activeRequest = null;
         }
     }
+    async tryResolvePendingCustomerSelection(userInput, context, ui) {
+    if (!this.pendingCustomerSelection?.options?.length) {
+        return null;
+    }
+
+    const value = this.getCleanValue(userInput);
+
+    const match = this.pendingCustomerSelection.options.find((c, index) => {
+        const customerNumber = this.getCleanValue(c.CustomerNumber);
+        const branch = this.getCleanValue(c.Branch).toLowerCase();
+
+        return (
+            customerNumber === value ||
+            branch === value.toLowerCase() ||
+            parseInt(value) === index + 1
+        );
+    });
+
+    if (!match) {
+        console.log("No match found for pending customer selection:", value);
+        return null;
+    }
+
+    // Clear only after successful match
+    this.pendingCustomerSelection = null;
+
+    console.log("Matched customer:", match);
+
+    const result = await this.registry.execute(
+        "search.execute",
+        {
+            type: "RENTAL",
+            filterQuery: `Customer eq '${match.CustomerNumber}'`,
+            topCount: 10
+        },
+        context
+    );
+
+    const rows = this.getRowsFromToolResult(result);
+
+    if (!rows.length) {
+        return {
+            success: true,
+            answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+        };
+    }
+
+    // Remember the active request
+    if (result?.success) {
+        this.rememberActiveRequest(result, {
+            type: "RENTAL",
+            filterQuery: `Customer eq '${match.CustomerNumber}'`,
+            topCount: 10
+        }, context);
+
+        this.captureSchema("RENTAL", result);
+    }
+
+    // Build a nice response
+    const requestList = rows.map((row, index) => {
+        const id = this.getRequestId(row);
+        const status = this.getCleanValue(row.RequestStatus || row.Status);
+        const contact = this.getCleanValue(row.ContactName || row.Contact);
+        return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
+    }).join("\n");
+
+    return {
+        success: true,
+        answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`
+    };
+}
 
 async tryResolvePendingRequestAction(userInput, context, ui) {
     if (!this.activeRequest) {
