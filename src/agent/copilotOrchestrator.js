@@ -102,48 +102,57 @@ export class CopilotOrchestrator {
         }
     }
 
-    async tryResolvePendingCustomerSelection(userInput, context, ui) {
-        if (!this.pendingCustomerSelection) {
-            return null;
-        }
-
-        const value = this.getCleanValue(userInput);
-
-        const match = this.pendingCustomerSelection.options.find(
-            (c, index) =>
-                c.CustomerNumber === value ||
-                c.Branch?.toLowerCase() === value.toLowerCase() ||
-                parseInt(value) === index + 1
-        );
-
-        if (!match) {
-            return null;
-        }
-
-        this.pendingCustomerSelection = null;
-
-        const result = await this.registry.execute(
-            "search.execute",
-            {
-                type: "RENTAL",
-                filterQuery: `Customer eq '${match.CustomerNumber}'`,
-                topCount: 10
-            },
-            context
-        );
-
-        if (result?.success) {
-            this.rememberActiveRequest(result, {
-                type: "RENTAL",
-                filterQuery: `Customer eq '${match.CustomerNumber}'`,
-                topCount: 10
-            }, context);
-
-            this.captureSchema("RENTAL", result);
-        }
-
-        return result;
+  async tryResolvePendingCustomerSelection(userInput, context, ui) {
+    if (!this.pendingCustomerSelection?.options?.length) {
+        return null;
     }
+
+    const value = this.getCleanValue(userInput);
+
+    // Match by CustomerNumber (most important), Branch, or list index
+    const match = this.pendingCustomerSelection.options.find((c, index) => {
+        const customerNumber = this.getCleanValue(c.CustomerNumber);
+        const branch = this.getCleanValue(c.Branch).toLowerCase();
+
+        return (
+            customerNumber === value ||                     // exact customer number
+            branch === value.toLowerCase() ||               // branch name
+            parseInt(value) === index + 1                   // 1, 2, 3...
+        );
+    });
+
+    if (!match) {
+        console.log("No match found for pending customer selection:", value);
+        return null;
+    }
+
+    // Clear only after successful match
+    this.pendingCustomerSelection = null;
+
+    console.log("Matched customer:", match);
+
+    const result = await this.registry.execute(
+        "search.execute",
+        {
+            type: "RENTAL",
+            filterQuery: `Customer eq '${match.CustomerNumber}'`,
+            topCount: 10
+        },
+        context
+    );
+
+    if (result?.success) {
+        this.rememberActiveRequest(result, {
+            type: "RENTAL",
+            filterQuery: `Customer eq '${match.CustomerNumber}'`,
+            topCount: 10
+        }, context);
+
+        this.captureSchema("RENTAL", result);
+    }
+
+    return result;
+}
 
     async tryResolvePendingRequestAction(userInput, context, ui) {
         if (!this.activeRequest) {
