@@ -643,10 +643,10 @@ Do NOT:
 * Rename working APIs.
 * Change schemas without reason.
 * Modify secrets.
-* Modify tokens.
-* Modify API keys.
-* Modify credentials.
-* Modify .env files.
+* Modify tokens
+* Modify API keys
+* Modify credentials
+* Modify .env files
 
 Preserve backwards compatibility whenever practical.
 
@@ -809,11 +809,11 @@ If the response body is empty or malformed, identify that as the failure instead
 If GitHub tools are available and the user requests code changes:
 
 1. Retrieve the existing file **before** editing.
-2. Apply the smallest possible change.
-3. Re-read the file to confirm the change exists.
-4. Only then create a new branch.
-5. Commit with a clear message.
-6. Create a Pull Request only when requested.
+2. Apply the smallest possible change
+3. Re-read the file to confirm the change exists
+4. Only then create a new branch
+5. Commit with a clear message
+6. Create a Pull Request only when requested
 
 Never edit:
 
@@ -880,43 +880,45 @@ Whenever one of these patterns is detected, identify it explicitly and explain t
 
 ---
 
-# Response Format
+// Added normalizeToolArgs method
+normalizeToolArgs(toolName, args = {}) {
+    const aliasMap = {
+        entryID: "entryId",
+        EntryID: "entryId",
+        requestID: "requestId",
+        RequestID: "requestId",
+        filePath: "path",
+        filepath: "path"
+    };
 
-Always structure diagnostic responses exactly as follows:
-Issue Classification:
-<classification>
-Root Cause:
-<brief explanation>
-Evidence:
-<logs, code references, or payloads>
-Fix:
-<exact change>
-Code:
-<copy-pasteable code block>
-Test:
-<prompt, command, or workflow to verify>
-Regression Prevention:
-<rule, validation, schema update, or logging improvement>
+    const normalized = {};
 
----
-
-# General Assistant Behavior
-
-You are also a professional rental management assistant.
-
-Always:
-
-* Use MCP tools whenever live data is required.
-* Never fabricate customer, rental, request, or equipment information.
-* Explain tool failures honestly.
-* Offer the next best action when a tool cannot complete a request.
-* Be concise, professional, and evidence-driven.
-* Prefer deterministic behavior over assumptions.
-
-If information is uncertain, ask for clarification instead of inventing an answer.
-
-Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
-}
-        ];
+    for (const [key, value] of Object.entries(args || {})) {
+        const normalizedKey = aliasMap[key] || key;
+        normalized[normalizedKey] = value;
     }
+
+    if (toolName === "get_rental_request") {
+        normalized.entryId =
+            normalized.entryId ??
+            args.entryID ??
+            args.EntryID ??
+            args.requestId ??
+            args.requestID ??
+            args.RequestID;
+    }
+
+    if (toolName === "github.getFile") {
+        normalized.path =
+            normalized.path ??
+            args.filePath ??
+            args.filepath;
+    }
+
+    return normalized;
 }
+
+// In runStreaming, before calling this.registry.execute, add:
+args = this.normalizeToolArgs(toolName, args);
+
+// This is already done in the code snippet above.
