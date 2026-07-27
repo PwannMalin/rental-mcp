@@ -137,10 +137,14 @@ console.log(
             filterQuery:
                 input.filterQuery ||
                 (
-                    requestId
-                        ? `RequestID eq '${requestId}'`
-                        : undefined
-                )
+
+requestId
+
+? `RequestID eq ${Number(requestId)}`
+
+: undefined
+
+)
         });
 
         console.log(
