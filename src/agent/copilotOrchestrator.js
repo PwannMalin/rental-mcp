@@ -288,6 +288,8 @@ export class CopilotOrchestrator {
                        let args = {};
 try {
     args = JSON.parse(call.function.arguments || "{}");
+
+
 } catch (e) {
     args = {};
 }
@@ -314,6 +316,13 @@ if (toolName === "search.execute") {
             "search.execute called without type:",
             JSON.stringify(args, null, 2)
         );
+        console.log(
+
+"NORMALIZED SEARCH ARGS:",
+
+JSON.stringify(args, null, 2)
+
+);
     }
 }
 
