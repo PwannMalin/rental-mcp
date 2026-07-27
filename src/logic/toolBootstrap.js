@@ -149,12 +149,19 @@ console.log(
                 description: "Search customer delivery and door information.",
                 tags: ["customer", "delivery"],
                 async handler(input = {}) {
-                    return await search.handler({
-                        type: "CUSTOMER_INFO",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
-                        filterQuerydoor: input.filterQuerydoor || ""
-                    });
-                }
+    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+
+    const mappedInput = {
+        type: "CUSTOMER_INFO",
+        filterQuery: customerNumber 
+            ? `CustomerNumber eq '${String(customerNumber).trim()}'` 
+            : input.filterQuery || "",
+        topCount: input.topCount || 10
+    };
+
+    // Now call the shared search logic
+    return await searchTool().handler(mappedInput);
+}
             }
         ];
 

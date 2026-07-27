@@ -311,19 +311,21 @@ if (type === "CUSTOMER_INFO") {
                     };
                 }
 
-                let rows = [];
+               let rows = [];
 
-                if (Array.isArray(responseBody)) {
-                    rows = responseBody;
-                } else if (Array.isArray(responseBody?.value)) {
-                    rows = responseBody.value;
-                } else if (Array.isArray(responseBody?.results?.value)) {
-                    rows = responseBody.results.value;
-                } else if (Array.isArray(responseBody?.data?.value)) {
-                    rows = responseBody.data.value;
-                } else if (Array.isArray(flowResponse?.value)) {
-                    rows = flowResponse.value;
-                }
+if (Array.isArray(responseBody?.deliveryInfo?.value)) {
+    rows = responseBody.deliveryInfo.value;
+} else if (Array.isArray(responseBody?.value)) {
+    rows = responseBody.value;
+} else if (Array.isArray(responseBody)) {
+    rows = responseBody;
+} else if (Array.isArray(responseBody?.results?.value)) {
+    rows = responseBody.results.value;
+} else if (Array.isArray(responseBody?.data?.value)) {
+    rows = responseBody.data.value;
+} else if (Array.isArray(flowResponse?.value)) {
+    rows = flowResponse.value;
+}
 
                 const safeRows = Array.isArray(rows) ? rows : [];
 
