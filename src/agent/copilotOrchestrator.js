@@ -182,24 +182,19 @@ async tryResolvePendingRequestAction(userInput, context, ui) {
 
     // Keywords that should trigger showing request lines
     const showLinesKeywords = [
-        "request lines",
-        "rental request lines",
-        "lines",
-        "show me the lines",
-        "show lines",
-        "can i get the rental request lines",
-        "request details",
-        "details",
-        "yes more details",
-        "what equipment",
-        "equipment",
-        "show the full line",
-        "full line",
-        "more details",
-        "full details",
-        "expand",
-        "show everything"
-    ];
+    "request lines",
+    "rental request lines",
+    "show me the lines",
+    "show lines",
+    "show request lines",
+    "can i get the rental request lines",
+    "request details",
+    "show the full line",
+    "full line",
+    "more details on the line",
+    "expand the line",
+    "show everything on the line"
+];
 
     const wantsLines = showLinesKeywords.some(keyword => userText.includes(keyword));
 
@@ -289,6 +284,13 @@ formatRequestLinesAnswer(rows, userText = "") {
 
   async runStreaming(userInput, context = {}, ui) {
     // 1. Resolve pending customer selection
+
+    // Clear active request if the user is starting a completely new search
+const clearKeywords = ["new search", "search equipment", "search for", "find equipment", "lookup equipment"];
+if (clearKeywords.some(k => userInput.toLowerCase().includes(k))) {
+    this.activeRequest = null;
+    this.pendingCustomerSelection = null;
+}
     const selectionResult = await this.tryResolvePendingCustomerSelection(
         userInput,
         context,
