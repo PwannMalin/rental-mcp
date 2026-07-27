@@ -102,22 +102,21 @@ export class CopilotOrchestrator {
         }
     }
 
-  async tryResolvePendingCustomerSelection(userInput, context, ui) {
+ async tryResolvePendingCustomerSelection(userInput, context, ui) {
     if (!this.pendingCustomerSelection?.options?.length) {
         return null;
     }
 
     const value = this.getCleanValue(userInput);
 
-    // Match by CustomerNumber (most important), Branch, or list index
     const match = this.pendingCustomerSelection.options.find((c, index) => {
         const customerNumber = this.getCleanValue(c.CustomerNumber);
         const branch = this.getCleanValue(c.Branch).toLowerCase();
 
         return (
-            customerNumber === value ||                     // exact customer number
-            branch === value.toLowerCase() ||               // branch name
-            parseInt(value) === index + 1                   // 1, 2, 3...
+            customerNumber === value ||
+            branch === value.toLowerCase() ||
+            parseInt(value) === index + 1
         );
     });
 
@@ -140,6 +139,15 @@ export class CopilotOrchestrator {
         },
         context
     );
+
+    const rows = this.getRowsFromToolResult(result);
+
+    if (!rows.length) {
+        return {
+            success: true,
+            answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+        };
+    }
 
     if (result?.success) {
         this.rememberActiveRequest(result, {
@@ -231,234 +239,262 @@ if (!rows.length) {
         return null;
     }
 
-    async runStreaming(userInput, context = {}, ui) {
-        // 1. Resolve pending customer selection
-        const selectionResult = await this.tryResolvePendingCustomerSelection(
-            userInput,
-            context,
-            ui
-        );
-        if (selectionResult) {
-            return selectionResult;
-        }
+  async runStreaming(userInput, context = {}, ui) {
+    // 1. Resolve pending customer selection
+    const selectionResult = await this.tryResolvePendingCustomerSelection(
+        userInput,
+        context,
+        ui
+    );
+    if (selectionResult) {
+        return selectionResult;
+    }
 
-        // 2. Resolve pending request actions
-        const requestActionResult = await this.tryResolvePendingRequestAction(
-            userInput,
-            context,
-            ui
-        );
-        if (requestActionResult) {
-            return requestActionResult;
-        }
+    // 2. Resolve pending request actions
+    const requestActionResult = await this.tryResolvePendingRequestAction(
+        userInput,
+        context,
+        ui
+    );
+    if (requestActionResult) {
+        return requestActionResult;
+    }
 
-        const { userId, tenantId } = context;
+    const { userId, tenantId } = context;
 
-        let messages = this.buildSystemPrompt(userId, tenantId);
-        messages.push({ role: "user", content: userInput });
+    let messages = this.buildSystemPrompt(userId, tenantId);
+    messages.push({ role: "user", content: userInput });
 
-        for (let step = 0; step < this.maxSteps; step++) {
-            await ui.typing();
+    for (let step = 0; step < this.maxSteps; step++) {
+        await ui.typing();
 
-            try {
-                const response = await this.llm.chat.completions.create({
-                    model: process.env.AZURE_OPENAI_DEPLOYMENT,
-                    messages,
-                    tools: this.buildTools(),
-                    tool_choice: "auto",
-                    temperature: 0.3
-                });
+        try {
+            const response = await this.llm.chat.completions.create({
+                model: process.env.AZURE_OPENAI_DEPLOYMENT,
+                messages,
+                tools: this.buildTools(),
+                tool_choice: "auto",
+                temperature: 0.3
+            });
 
-                const msg = response.choices[0].message;
+            const msg = response.choices[0].message;
 
-                console.log("========== LLM RESPONSE ==========");
-                console.log("content:", msg.content);
-                console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
-                console.log("==================================");
+            console.log("========== LLM RESPONSE ==========");
+            console.log("content:", msg.content);
+            console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
+            console.log("==================================");
 
-                // Final answer
-                if (msg.content && !msg.tool_calls?.length) {
-                    await ui.update("Finalizing response...");
-                    let answer = msg.content;
+            // Final answer
+            if (msg.content && !msg.tool_calls?.length) {
+                await ui.update("Finalizing response...");
+                let answer = msg.content;
 
-                    if (
-                        answer.toLowerCase().includes("unable to search") ||
-                        answer.toLowerCase().includes("no customer")
-                    ) {
-                        answer = "I couldn't find matching customer data at the moment. " + answer;
-                    }
-
-                    return { success: true, answer };
+                if (
+                    answer.toLowerCase().includes("unable to search") ||
+                    answer.toLowerCase().includes("no customer")
+                ) {
+                    answer = "I couldn't find matching customer data at the moment. " + answer;
                 }
 
-                // Tool calls
-                if (msg.tool_calls?.length) {
-                    messages.push(msg);
+                return { success: true, answer };
+            }
 
-                    for (const call of msg.tool_calls) {
-                        const toolName = call.function.name;
-                        await ui.update(`Using: ${toolName}`);
+            // Tool calls
+            if (msg.tool_calls?.length) {
+                messages.push(msg);
 
-                       let args = {};
-try {
-    args = JSON.parse(call.function.arguments || "{}");
+                for (const call of msg.tool_calls) {
+                    const toolName = call.function.name;
+                    await ui.update(`Using: ${toolName}`);
 
+                    let args = {};
+                    try {
+                        args = JSON.parse(call.function.arguments || "{}");
+                    } catch (e) {
+                        args = {};
+                    }
 
-} catch (e) {
-    args = {};
-}
+                    // Normalize common LLM argument aliases
+                    if (toolName === "search.execute") {
+                        args.type = String(
+                            args.type ||
+                            args.searchType ||
+                            args.SearchType ||
+                            ""
+                        ).trim().toUpperCase();
 
-// Normalize common LLM argument aliases before tool execution
-if (toolName === "search.execute") {
-    args.type = String(
-        args.type ||
-        args.searchType ||
-        args.SearchType ||
-        ""
-    ).trim().toUpperCase();
+                        args.SearchTerm =
+                            args.SearchTerm ||
+                            args.searchTerm ||
+                            args.searchText ||
+                            args.SearchText ||
+                            args.query ||
+                            "";
+                    }
 
-    args.SearchTerm =
-        args.SearchTerm ||
-        args.searchTerm ||
-        args.searchText ||
-        args.SearchText ||
-        args.query ||
-        "";
+                    let result;
 
-    if (!args.type) {
-        console.warn(
-            "search.execute called without type:",
-            JSON.stringify(args, null, 2)
-        );
-        console.log(
+                    try {
+                        console.log("Calling tool:", toolName);
+                        console.log("Arguments:", args);
 
-"NORMALIZED SEARCH ARGS:",
+                        result = await this.registry.execute(toolName, args, context);
 
-JSON.stringify(args, null, 2)
+                        // Capture schema
+                        if (result?.success) {
+                            const type = String(args?.type || "").toUpperCase();
+                            if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+                                this.captureSchema(type, result);
+                            }
+                        }
 
-);
-    }
-}
+                        const normalizedType = String(args?.type || "").toUpperCase();
+                        const rows = this.getRowsFromToolResult(result);
 
-                        let result;
+                        // === MULTI CUSTOMER HANDLING WITH REQUEST COUNTS ===
+                        if (
+                            toolName === "search.execute" &&
+                            normalizedType === "CUSTOMER" &&
+                            rows.length > 1
+                        ) {
+                            const customersToCheck = rows.slice(0, 10);
 
-                        try {
-                            console.log("Calling tool:", toolName);
-                            console.log("Arguments:", args);
+                            this.pendingCustomerSelection = {
+                                options: customersToCheck.map(row => ({
+                                    CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
+                                    Branch: this.getCleanValue(row.Branch || row.branch),
+                                    customerName: this.getCleanValue(
+                                        row.CustomerName ||
+                                        row.customerName ||
+                                        row.Name ||
+                                        row.name
+                                    )
+                                }))
+                            };
 
-                         result = await this.registry.execute(toolName, args, context);
+                            console.log(
+                                "PENDING CUSTOMER SELECTION SET:",
+                                JSON.stringify(this.pendingCustomerSelection, null, 2)
+                            );
 
-// Capture schema when possible
-if (result?.success) {
-    const type = String(args?.type || "").toUpperCase();
+                            // Enrich with request counts
+                            const enrichedOptions = [];
 
-    if (type && this.discoveredSchemas.hasOwnProperty(type)) {
-        this.captureSchema(type, result);
-    }
-}
+                            for (const customer of this.pendingCustomerSelection.options) {
+                                try {
+                                    const rentalResult = await this.registry.execute(
+                                        "search.execute",
+                                        {
+                                            type: "RENTAL",
+                                            filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+                                            topCount: 50
+                                        },
+                                        context
+                                    );
 
-// Store pending customer selection from normal CUSTOMER search results
-const normalizedType = String(args?.type || "").toUpperCase();
-const rows = this.getRowsFromToolResult(result);
+                                    const rentalRows = this.getRowsFromToolResult(rentalResult);
 
-if (
-    toolName === "search.execute" &&
-    normalizedType === "CUSTOMER" &&
-    rows.length > 1
-) {
-    this.pendingCustomerSelection = {
-        options: rows.map(row => ({
-            CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
-            Branch: this.getCleanValue(row.Branch || row.branch),
-            customerName: this.getCleanValue(
-                row.CustomerName ||
-                row.customerName ||
-                row.Name ||
-                row.name
-            )
-        }))
-    };
-
-    console.log(
-        "PENDING CUSTOMER SELECTION SET:",
-        JSON.stringify(this.pendingCustomerSelection, null, 2)
-    );
-}
-
-// Remember active rental request
-const looksLikeRentalResult =
-    result?.data?.searchType === "RENTAL" ||
-    result?.searchType === "RENTAL" ||
-    normalizedType === "RENTAL";
-
-if (looksLikeRentalResult && result.success) {
-    this.rememberActiveRequest(result, args, context);
-}
-
-console.log(
-    "ACTIVE REQUEST AFTER TOOL:",
-    JSON.stringify(this.activeRequest, null, 2)
-);
-
-// Handle older tools that explicitly return requiresSelection
-if (result?.requiresSelection && result?.options?.length) {
-                                this.pendingCustomerSelection = {
-                                    options: result.options.map(c => ({
-                                        CustomerNumber: c.customerNumber || c.CustomerNumber,
-                                        Branch: c.branch || c.Branch,
-                                        customerName: c.customerName || c.CustomerName
-                                    }))
-                                };
-
-                                return {
-                                    success: true,
-                                    answer:
-                                        "Multiple customer locations found.\n\n" +
-                                        result.options
-                                            .map(
-                                                (c, i) =>
-                                                    `${i + 1}. ${c.customerName || c.CustomerName} (${c.branch || c.Branch})`
-                                            )
-                                            .join("\n"),
-                                    awaitingCustomerSelection: true,
-                                    options: result.options
-                                };
+                                    enrichedOptions.push({
+                                        ...customer,
+                                        requestCount: rentalRows.length
+                                    });
+                                } catch (err) {
+                                    console.error(`Failed to get request count for ${customer.CustomerNumber}:`, err.message);
+                                    enrichedOptions.push({
+                                        ...customer,
+                                        requestCount: "?"
+                                    });
+                                }
                             }
 
-                            console.log("TOOL RESULT:", JSON.stringify(result, null, 2));
-                        } catch (toolErr) {
-                            console.error(`Tool ${toolName} failed:`, toolErr.message);
-                            result = {
-                                success: false,
-                                error: toolErr.message,
-                                message: `The ${toolName} tool encountered an issue.`
+                            const answerLines = enrichedOptions.map((c, i) => {
+                                return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
+                            });
+
+                            return {
+                                success: true,
+                                answer:
+                                    `Found ${enrichedOptions.length} customers matching your search:\n\n` +
+                                    answerLines.join("\n") +
+                                    `\n\nPlease reply with the number or Customer # you want to continue with.`,
+                                awaitingCustomerSelection: true,
+                                options: enrichedOptions
                             };
                         }
 
-                        messages.push({
-                            role: "tool",
-                            tool_call_id: call.id,
-                            content: JSON.stringify(result)
-                        });
+                        // Remember active rental request
+                        const looksLikeRentalResult =
+                            result?.data?.searchType === "RENTAL" ||
+                            result?.searchType === "RENTAL" ||
+                            normalizedType === "RENTAL";
 
-                        await ui.update(`Completed: ${toolName}`);
+                        if (looksLikeRentalResult && result.success) {
+                            this.rememberActiveRequest(result, args, context);
+                        }
+
+                        console.log(
+                            "ACTIVE REQUEST AFTER TOOL:",
+                            JSON.stringify(this.activeRequest, null, 2)
+                        );
+
+                        // Handle older tools that return requiresSelection
+                        if (result?.requiresSelection && result?.options?.length) {
+                            this.pendingCustomerSelection = {
+                                options: result.options.map(c => ({
+                                    CustomerNumber: c.customerNumber || c.CustomerNumber,
+                                    Branch: c.branch || c.Branch,
+                                    customerName: c.customerName || c.CustomerName
+                                }))
+                            };
+
+                            return {
+                                success: true,
+                                answer:
+                                    "Multiple customer locations found.\n\n" +
+                                    result.options
+                                        .map(
+                                            (c, i) =>
+                                                `${i + 1}. ${c.customerName || c.CustomerName} (${c.branch || c.Branch})`
+                                        )
+                                        .join("\n"),
+                                awaitingCustomerSelection: true,
+                                options: result.options
+                            };
+                        }
+
+                        console.log("TOOL RESULT:", JSON.stringify(result, null, 2));
+                    } catch (toolErr) {
+                        console.error(`Tool ${toolName} failed:`, toolErr.message);
+                        result = {
+                            success: false,
+                            error: toolErr.message,
+                            message: `The ${toolName} tool encountered an issue.`
+                        };
                     }
-                }
-            } catch (err) {
-                console.error(`Error in step ${step}:`, err);
-                return {
-                    success: false,
-                    answer: `ERROR: ${err.message}`
-                };
-            }
-        }
 
-        return {
-            success: false,
-            answer: "I couldn't complete the request after several attempts."
-        };
+                    messages.push({
+                        role: "tool",
+                        tool_call_id: call.id,
+                        content: JSON.stringify(result)
+                    });
+
+                    await ui.update(`Completed: ${toolName}`);
+                }
+            }
+        } catch (err) {
+            console.error(`Error in step ${step}:`, err);
+            return {
+                success: false,
+                answer: `ERROR: ${err.message}`
+            };
+        }
     }
 
+    return {
+        success: false,
+        answer: "I couldn't complete the request after several attempts."
+    };
+}
     buildTools() {
         const tools = this.registry?.tools || {};
         const toolList =
