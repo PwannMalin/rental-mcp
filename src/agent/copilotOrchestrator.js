@@ -217,6 +217,43 @@ export class CopilotOrchestrator {
         return null;
     }
 
+    normalizeToolArgs(toolName, args = {}) {
+        const aliasMap = {
+            entryID: "entryId",
+            EntryID: "entryId",
+            requestID: "requestId",
+            RequestID: "requestId",
+            filePath: "path",
+            filepath: "path"
+        };
+
+        const normalized = {};
+
+        for (const [key, value] of Object.entries(args || {})) {
+            const normalizedKey = aliasMap[key] || key;
+            normalized[normalizedKey] = value;
+        }
+
+        if (toolName === "get_rental_request") {
+            normalized.entryId =
+                normalized.entryId ??
+                args.entryID ??
+                args.EntryID ??
+                args.requestId ??
+                args.requestID ??
+                args.RequestID;
+        }
+
+        if (toolName === "github.getFile") {
+            normalized.path =
+                normalized.path ??
+                args.filePath ??
+                args.filepath;
+        }
+
+        return normalized;
+    }
+
     async runStreaming(userInput, context = {}, ui) {
         // 1. Resolve pending customer selection
         const selectionResult = await this.tryResolvePendingCustomerSelection(
@@ -285,46 +322,56 @@ export class CopilotOrchestrator {
                         const toolName = call.function.name;
                         await ui.update(`Using: ${toolName}`);
 
-                       let args = {};
-try {
-    args = JSON.parse(call.function.arguments || "{}");
+                        let args = {};
+                        try {
+                            args = JSON.parse(call.function.arguments || "{}");
+                        } catch (e) {
+                            args = {};
+                        }
 
+                        // Normalize common LLM argument aliases before tool execution
+                        if (toolName === "search.execute") {
+                            args.type = String(
+                                args.type ||
+                                args.searchType ||
+                                args.SearchType ||
+                                ""
+                            ).trim().toUpperCase();
 
-} catch (e) {
-    args = {};
-}
+                            args.SearchTerm =
+                                args.SearchTerm ||
+                                args.searchTerm ||
+                                args.searchText ||
+                                args.SearchText ||
+                                args.query ||
+                                "";
 
-// Normalize common LLM argument aliases before tool execution
-if (toolName === "search.execute") {
-    args.type = String(
-        args.type ||
-        args.searchType ||
-        args.SearchType ||
-        ""
-    ).trim().toUpperCase();
+                            if (!args.type) {
+                                console.warn(
+                                    "search.execute called without type:",
+                                    JSON.stringify(args, null, 2)
+                                );
+                                console.log(
+                                    "NORMALIZED SEARCH ARGS:",
+                                    JSON.stringify(args, null, 2)
+                                );
+                            }
+                        }
 
-    args.SearchTerm =
-        args.SearchTerm ||
-        args.searchTerm ||
-        args.searchText ||
-        args.SearchText ||
-        args.query ||
-        "";
+                        // Centralized argument normalization for all tools
+                        args = this.normalizeToolArgs(toolName, args);
 
-    if (!args.type) {
-        console.warn(
-            "search.execute called without type:",
-            JSON.stringify(args, null, 2)
-        );
-        console.log(
-
-"NORMALIZED SEARCH ARGS:",
-
-JSON.stringify(args, null, 2)
-
-);
-    }
-}
+                        console.log(
+                            "NORMALIZED TOOL ARGS:",
+                            JSON.stringify(
+                                {
+                                    toolName,
+                                    args
+                                },
+                                null,
+                                2
+                            )
+                        );
 
                         let result;
 
@@ -332,62 +379,62 @@ JSON.stringify(args, null, 2)
                             console.log("Calling tool:", toolName);
                             console.log("Arguments:", args);
 
-                         result = await this.registry.execute(toolName, args, context);
+                            result = await this.registry.execute(toolName, args, context);
 
-// Capture schema when possible
-if (result?.success) {
-    const type = String(args?.type || "").toUpperCase();
+                            // Capture schema when possible
+                            if (result?.success) {
+                                const type = String(args?.type || "").toUpperCase();
 
-    if (type && this.discoveredSchemas.hasOwnProperty(type)) {
-        this.captureSchema(type, result);
-    }
-}
+                                if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+                                    this.captureSchema(type, result);
+                                }
+                            }
 
-// Store pending customer selection from normal CUSTOMER search results
-const normalizedType = String(args?.type || "").toUpperCase();
-const rows = this.getRowsFromToolResult(result);
+                            // Store pending customer selection from normal CUSTOMER search results
+                            const normalizedType = String(args?.type || "").toUpperCase();
+                            const rows = this.getRowsFromToolResult(result);
 
-if (
-    toolName === "search.execute" &&
-    normalizedType === "CUSTOMER" &&
-    rows.length > 1
-) {
-    this.pendingCustomerSelection = {
-        options: rows.map(row => ({
-            CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
-            Branch: this.getCleanValue(row.Branch || row.branch),
-            customerName: this.getCleanValue(
-                row.CustomerName ||
-                row.customerName ||
-                row.Name ||
-                row.name
-            )
-        }))
-    };
+                            if (
+                                toolName === "search.execute" &&
+                                normalizedType === "CUSTOMER" &&
+                                rows.length > 1
+                            ) {
+                                this.pendingCustomerSelection = {
+                                    options: rows.map(row => ({
+                                        CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
+                                        Branch: this.getCleanValue(row.Branch || row.branch),
+                                        customerName: this.getCleanValue(
+                                            row.CustomerName ||
+                                            row.customerName ||
+                                            row.Name ||
+                                            row.name
+                                        )
+                                    }))
+                                };
 
-    console.log(
-        "PENDING CUSTOMER SELECTION SET:",
-        JSON.stringify(this.pendingCustomerSelection, null, 2)
-    );
-}
+                                console.log(
+                                    "PENDING CUSTOMER SELECTION SET:",
+                                    JSON.stringify(this.pendingCustomerSelection, null, 2)
+                                );
+                            }
 
-// Remember active rental request
-const looksLikeRentalResult =
-    result?.data?.searchType === "RENTAL" ||
-    result?.searchType === "RENTAL" ||
-    normalizedType === "RENTAL";
+                            // Remember active rental request
+                            const looksLikeRentalResult =
+                                result?.data?.searchType === "RENTAL" ||
+                                result?.searchType === "RENTAL" ||
+                                normalizedType === "RENTAL";
 
-if (looksLikeRentalResult && result.success) {
-    this.rememberActiveRequest(result, args, context);
-}
+                            if (looksLikeRentalResult && result.success) {
+                                this.rememberActiveRequest(result, args, context);
+                            }
 
-console.log(
-    "ACTIVE REQUEST AFTER TOOL:",
-    JSON.stringify(this.activeRequest, null, 2)
-);
+                            console.log(
+                                "ACTIVE REQUEST AFTER TOOL:",
+                                JSON.stringify(this.activeRequest, null, 2)
+                            );
 
-// Handle older tools that explicitly return requiresSelection
-if (result?.requiresSelection && result?.options?.length) {
+                            // Handle older tools that explicitly return requiresSelection
+                            if (result?.requiresSelection && result?.options?.length) {
                                 this.pendingCustomerSelection = {
                                     options: result.options.map(c => ({
                                         CustomerNumber: c.customerNumber || c.CustomerNumber,
@@ -533,12 +580,12 @@ Identify the exact layer responsible for the failure.
 
 For every issue:
 
-1. Classify the failure.
-2. Collect evidence.
-3. Identify the root cause.
-4. Recommend the smallest safe fix.
-5. Explain why the fix resolves the issue.
-6. Explain how to prevent the issue from occurring again.
+1. Classify the failure
+2. Collect evidence
+3. Identify the root cause
+4. Recommend the smallest safe fix
+5. Explain why the fix resolves the issue
+6. Explain how to prevent the issue from occurring again
 
 Never rewrite working code when a targeted fix is sufficient.
 
@@ -763,7 +810,7 @@ If GitHub tools are available and the user requests code changes:
 
 1. Retrieve the existing file **before** editing.
 2. Apply the smallest possible change.
-3. Re-read the file to confirm the change.
+3. Re-read the file to confirm the change exists.
 4. Only then create a new branch.
 5. Commit with a clear message.
 6. Create a Pull Request only when requested.
@@ -869,8 +916,7 @@ Always:
 If information is uncertain, ask for clarification instead of inventing an answer.
 
 Your objective is to make the Rental MCP more reliable, easier to diagnose, easier to maintain, and safer to evolve while preserving existing behavior whenever possible.
-`
-            }
+}
         ];
     }
 }
