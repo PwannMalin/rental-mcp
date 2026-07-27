@@ -108,7 +108,7 @@ function buildFilter(type, searchTerm, input = {}) {
         case "LOOKUPS":
             return input.filterQuery || "";
 
-            
+
         case "RENTAL":
             return input.filterQuery || "";
 
@@ -220,13 +220,25 @@ if (validationError) {
                     };
                 }
 
-                const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
+               const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
 
-                const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
+const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
-                const allowEmptyFilter =
+// ===== MOVE THIS BLOCK HERE =====
+// Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
+if (type === "CUSTOMER_INFO") {
+    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+
+    if (customerNumber && !input.filterQuery && !searchTerm) {
+        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
+    }
+}
+// ================================
+
+const allowEmptyFilter =
     type === "LOOKUPS" ||
-    type === "RENTAL";
+    type === "RENTAL" ||
+    type === "CUSTOMER_INFO";
 
 if (
     !allowEmptyFilter &&
@@ -239,15 +251,20 @@ if (
     };
 }
 
-                const payload = {
-                    filterQuery: buildFilter(type, normalizedSearchTerm, input),
-                    topCount: input.topCount,
-                    orderBy: input.orderBy
-                };
+const payload = {
+    filterQuery: buildFilter(type, normalizedSearchTerm, input),
+    topCount: input.topCount,
+    orderBy: input.orderBy
+};
 
-                if (type === "CUSTOMER_INFO") {
-                    payload.filterQuerydoor = input.filterQuerydoor || "";
-                }
+                // Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
+if (type === "CUSTOMER_INFO") {
+    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+
+    if (customerNumber && !input.filterQuery && !searchTerm) {
+        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
+    }
+}
 
                 console.log(`🔍 ${type} Search:`, payload);
                 console.log("Environment variable:", config.env);
