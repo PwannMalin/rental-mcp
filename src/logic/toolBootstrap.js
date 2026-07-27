@@ -115,16 +115,35 @@ console.log(
     }
 },
             {
-                name: "search_request_lines",
-                description: "Find current rental request lines.",
-                tags: ["request", "lines"],
-                async handler(input = {}) {
-                    return await search.handler({
-                        type: "REQUEST_LINES",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
-                    });
-                }
-            },
+    name: "search_request_lines",
+    description: "Find current rental request lines.",
+    tags: ["request", "lines"],
+    async handler(input = {}) {
+
+        const requestId =
+            input.RequestID ||
+            input.requestId ||
+            input.requestID;
+
+        return await search.handler({
+            type: "REQUEST_LINES",
+
+            SearchTerm:
+                input.searchText ||
+                input.searchTerm ||
+                input.query ||
+                "",
+
+            filterQuery:
+                input.filterQuery ||
+                (
+                    requestId
+                        ? `RequestID eq '${requestId}'`
+                        : undefined
+                )
+        });
+    }
+},
             {
                 name: "search_customer_delivery_info",
                 description: "Search customer delivery and door information.",

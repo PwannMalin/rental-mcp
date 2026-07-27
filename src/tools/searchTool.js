@@ -108,6 +108,7 @@ function buildFilter(type, searchTerm, input = {}) {
         case "LOOKUPS":
             return input.filterQuery || "";
 
+            
         case "RENTAL":
             return input.filterQuery || "";
 
