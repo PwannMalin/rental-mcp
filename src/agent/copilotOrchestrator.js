@@ -17,6 +17,10 @@ export class CopilotOrchestrator {
             REQUEST_LINES: null,
             EQUIPMENT: null
         };
+
+        this.lastAgentQuestion = null;
+    this.lastSearchResults = null;
+    this.lastSearchType = null;
     }
 
     getSessionKey(context) {
@@ -39,6 +43,30 @@ export class CopilotOrchestrator {
     getCleanValue(value = "") {
         return String(value || "").trim();
     }
+
+    showRemainingResults() {
+    if (!this.lastSearchResults || this.lastSearchResults.length <= 1) {
+        return {
+            success: true,
+            answer: "I don't have additional results to show."
+        };
+    }
+
+    const remaining = this.lastSearchResults.slice(1); // skip the first one already shown
+
+    const lines = remaining.map((row, i) => {
+        // Format according to the type (EQUIPMENT example)
+        return `${i + 2}. ${row.Model || row.EquipModel || "—"} — Serial: ${row.Serial || row.SerialNumber || "—"} — Branch: ${row.Branch || "—"}`;
+    }).join("\n");
+
+    // Clear the pending question
+    this.lastAgentQuestion = null;
+
+    return {
+        success: true,
+        answer: `Here are the remaining ${remaining.length} record(s):\n\n${lines}`
+    };
+}
 
     getRequestId(row = {}) {
         return (
@@ -284,7 +312,13 @@ formatRequestLinesAnswer(rows, userText = "") {
 
   async runStreaming(userInput, context = {}, ui) {
     // 1. Resolve pending customer selection
+const affirmative = ["yes", "yeah", "yep", "sure", "ok", "okay", "please", "the other ones", "show the rest", "more"];
+const userText = this.getCleanValue(userInput).toLowerCase();
 
+if (affirmative.includes(userText) && this.lastSearchResults?.length > 1) {
+    // User is answering the previous "would you like the others?" question
+    return this.showRemainingResults();
+}
     // Clear active request if the user is starting a completely new search
 const clearKeywords = ["new search", "search equipment", "search for", "find equipment", "lookup equipment"];
 if (clearKeywords.some(k => userInput.toLowerCase().includes(k))) {
