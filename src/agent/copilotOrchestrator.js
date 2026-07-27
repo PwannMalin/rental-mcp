@@ -217,77 +217,7 @@ formatRequestLinesAnswer(rows, userText = "") {
     };
 }
 
-  async tryResolvePendingRequestAction(userInput, context, ui) {
-    if (!this.activeRequest) {
-        return null;
-    }
-
-    const userText = this.getCleanValue(userInput).toLowerCase();
-
-    const requestLineKeywords = [
-        "request lines",
-        "rental request lines",
-        "lines",
-        "show me the lines",
-        "show lines",
-        "can i get the rental request lines",
-        "request details",
-        "details",
-        "yes more details",
-        "what equipment",
-        "equipment"
-    ];
-
-    if (requestLineKeywords.some(keyword => userText.includes(keyword))) {
-        const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
-
-        await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
-
-        const result = await this.registry.execute(
-            "search.execute",
-            {
-                type: "REQUEST_LINES",
-                filterQuery,
-                topCount: 10
-            },
-            context
-        );
-
-        this.captureSchema("REQUEST_LINES", result);
-
-        const rows = this.getRowsFromToolResult(result);
-
-        return {
-            success: true,
-            answer: rows.length
-                ? `Found ${rows.length} request line(s) for RequestID ${this.activeRequest.RequestID}:\n\n` +
-                  rows
-                      .map((row, index) => {
-                          const description =
-                              row.Line_Description ||
-                              row.Description ||
-                              row.EquipModel ||
-                              row.Model ||
-                              row.ItemDescription ||
-                              "No description";
-
-                          const quantity =
-                              row.Quantity ||
-                              row.Qty ||
-                              row.RequestedQuantity ||
-                              "";
-
-                          return `${index + 1}. ${description}${
-                              quantity ? ` — Qty: ${quantity}` : ""
-                          }`;
-                      })
-                      .join("\n")
-                : `I found RequestID ${this.activeRequest.RequestID}, but I did not find any request lines for it.`
-        };
-    }
-
-    return null;
-}
+ 
 
   async runStreaming(userInput, context = {}, ui) {
     // 1. Resolve pending customer selection
