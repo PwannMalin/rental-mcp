@@ -140,27 +140,39 @@ export class CopilotOrchestrator {
         context
     );
 
-    const rows = this.getRowsFromToolResult(result);
+   const rows = this.getRowsFromToolResult(result);
 
-    if (!rows.length) {
-        return {
-            success: true,
-            answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
-        };
-    }
-
-    if (result?.success) {
-        this.rememberActiveRequest(result, {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 10
-        }, context);
-
-        this.captureSchema("RENTAL", result);
-    }
-
-    return result;
+if (!rows.length) {
+    return {
+        success: true,
+        answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+    };
 }
+
+// We have results – remember the active request
+if (result?.success) {
+    this.rememberActiveRequest(result, {
+        type: "RENTAL",
+        filterQuery: `Customer eq '${match.CustomerNumber}'`,
+        topCount: 10
+    }, context);
+
+    this.captureSchema("RENTAL", result);
+}
+
+// Build a nice response for the user
+const requestList = rows.map((row, index) => {
+    const id = this.getRequestId(row);
+    const status = this.getCleanValue(row.RequestStatus || row.Status);
+    const contact = this.getCleanValue(row.ContactName || row.Contact);
+    return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
+}).join("\n");
+
+return {
+    success: true,
+    answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`
+};
+ }
 
   async tryResolvePendingRequestAction(userInput, context, ui) {
     if (!this.activeRequest) {
