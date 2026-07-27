@@ -253,33 +253,30 @@ formatRequestLinesAnswer(rows, userText = "") {
         userText.includes("full") || 
         userText.includes("more details") || 
         userText.includes("expand") ||
-        userText.includes("everything");
+        userText.includes("everything") ||
+        userText.includes("serial") ||
+        userText.includes("info");
 
     const linesText = rows.map((row, index) => {
-        const description =
-            row.Line_Description ||
-            row.Description ||
-            row.EquipModel ||
-            row.Model ||
-            row.ItemDescription ||
-            "No description";
-
-        const quantity = row.Quantity || row.Qty || row.RequestedQuantity || "";
-        const serial = row.SerialNumber || row.Serial || row.SerialNo || "";
-        const model = row.Model || row.EquipModel || row.ModelNumber || "";
-        const status = row.LineStatus || row.Status || "";
+        const model = row.EquipModel || row.Model || "—";
+        const qty = row.RequestedQty || row.Quantity || row.Qty || "—";
+        const oach = row.OACH || "—";
+        const capacity = row.Capacity || "—";
+        const series = row.EquipSeries || "";
+        const group = row.EquipGroup || "";
+        const comments = row.comments || row.Comments || "";
 
         if (wantsFull) {
-            // Full detail version
             return (
-                `${index + 1}. ${description}\n` +
-                `   Model: ${model || "—"} | Qty: ${quantity || "—"} | Serial: ${serial || "—"}\n` +
-                `   Status: ${status || "—"}`
+                `${index + 1}. ${model}\n` +
+                `   Group: ${group} | Series: ${series}\n` +
+                `   Qty: ${qty} | OACH: ${oach}" | Capacity: ${capacity} lbs\n` +
+                (comments ? `   Notes: ${comments.trim()}` : "")
             );
         }
 
-        // Normal short version
-        return `${index + 1}. ${description}${quantity ? ` — Qty: ${quantity}` : ""}${serial ? ` — Serial: ${serial}` : ""}`;
+        // Short version
+        return `${index + 1}. ${model} — Qty: ${qty} — OACH: ${oach}" — Capacity: ${capacity} lbs`;
     }).join("\n\n");
 
     return {
