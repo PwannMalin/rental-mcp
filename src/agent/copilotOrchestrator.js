@@ -208,29 +208,47 @@ async tryResolvePendingRequestAction(userInput, context, ui) {
 
     const userText = this.getCleanValue(userInput).toLowerCase();
 
-    // Keywords that should trigger showing request lines
+    // Broader set of keywords / patterns that mean "talk about the current request lines"
     const showLinesKeywords = [
-    "request lines",
-    "rental request lines",
-    "show me the lines",
-    "show lines",
-    "show request lines",
-    "can i get the rental request lines",
-    "request details",
-    "show the full line",
-    "full line",
-    "more details on the line",
-    "expand the line",
-    "show everything on the line"
-];
+        "request lines",
+        "rental request lines",
+        "show me the lines",
+        "show lines",
+        "show request lines",
+        "can i get the rental request lines",
+        "request details",
+        "show the full line",
+        "full line",
+        "more details on the line",
+        "expand the line",
+        "show everything on the line",
+        "full equipment info",
+        "full equipment",
+        "equipment info",
+        "what model",
+        "model",
+        "details",
+        "more details",
+        "full details",
+        "serial",
+        "capacity",
+        "oach",
+        "qty",
+        "quantity"
+    ];
 
-    const wantsLines = showLinesKeywords.some(keyword => userText.includes(keyword));
+    // Also treat a pure number (e.g. "1") as selecting a line when we already have lines
+    const isLineNumber = /^\d+$/.test(userText);
+
+    const wantsLines =
+        showLinesKeywords.some(keyword => userText.includes(keyword)) ||
+        isLineNumber;
 
     if (!wantsLines) {
         return null;
     }
 
-    // If we already fetched the lines earlier in this session, reuse them
+    // Re-use already fetched lines if we have them
     if (this.activeRequest.lines && this.activeRequest.lines.length > 0) {
         return this.formatRequestLinesAnswer(this.activeRequest.lines, userText);
     }
@@ -254,8 +272,13 @@ async tryResolvePendingRequestAction(userInput, context, ui) {
 
     const rows = this.getRowsFromToolResult(result);
 
-    // Store the lines on the active request so follow-ups work
+    // Store the lines so follow-ups work
     this.activeRequest.lines = rows;
+
+    // Persist the updated state
+    if (typeof this.saveSessionState === "function") {
+        await this.saveSessionState(context);
+    }
 
     return this.formatRequestLinesAnswer(rows, userText);
 }
@@ -272,15 +295,28 @@ formatRequestLinesAnswer(rows, userText = "") {
         };
     }
 
-    const wantsFull = 
-        userText.includes("full") || 
-        userText.includes("more details") || 
+    const wantsFull =
+        userText.includes("full") ||
+        userText.includes("more details") ||
         userText.includes("expand") ||
         userText.includes("everything") ||
         userText.includes("serial") ||
-        userText.includes("info");
+        userText.includes("info") ||
+        userText.includes("model") ||
+        userText.includes("capacity") ||
+        userText.includes("oach");
 
-    const linesText = rows.map((row, index) => {
+    // If user typed a number, show only that line in full
+    const lineNumber = parseInt(userText, 10);
+    let linesToShow = rows;
+
+    if (!isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= rows.length) {
+        linesToShow = [rows[lineNumber - 1]];
+    }
+
+    const linesText = linesToShow.map((row, index) => {
+        const displayIndex = linesToShow.length === 1 ? lineNumber || 1 : index + 1;
+
         const model = row.EquipModel || row.Model || "—";
         const qty = row.RequestedQty || row.Quantity || row.Qty || "—";
         const oach = row.OACH || "—";
@@ -289,17 +325,16 @@ formatRequestLinesAnswer(rows, userText = "") {
         const group = row.EquipGroup || "";
         const comments = row.comments || row.Comments || "";
 
-        if (wantsFull) {
+        if (wantsFull || linesToShow.length === 1) {
             return (
-                `${index + 1}. ${model}\n` +
+                `${displayIndex}. ${model}\n` +
                 `   Group: ${group} | Series: ${series}\n` +
                 `   Qty: ${qty} | OACH: ${oach}" | Capacity: ${capacity} lbs\n` +
                 (comments ? `   Notes: ${comments.trim()}` : "")
             );
         }
 
-        // Short version
-        return `${index + 1}. ${model} — Qty: ${qty} — OACH: ${oach}" — Capacity: ${capacity} lbs`;
+        return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach}" — Capacity: ${capacity} lbs`;
     }).join("\n\n");
 
     return {
