@@ -12,7 +12,7 @@ import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
 
 console.log("🔥 ENTRY FILE LOADED");
-
+console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
 // ======================
 // ENV
 // ======================
@@ -181,7 +181,7 @@ app.get("/api/user-photo", async (req, res) => {
       return res.status(400).json({ error: "email required" });
     }
 
-    const baseUrl = process.env.PA_SEARCH_USER_URL;
+    const baseUrl = "https://ce126b244728497ea65f5ba37c81e8.54.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/8b3491988bcf41a3ba3454181caec525/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=__0EQl_cI_SqN6UtvatzpNF4h81h9SV2VZjz2HfDNQ8";
 
     if (!baseUrl) {
       console.error("PA_SEARCH_USER_URL is not defined");
