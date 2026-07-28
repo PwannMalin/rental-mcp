@@ -264,13 +264,31 @@ console.log("LOOKUPS TOOL CALLED");
 
 // Temporary simple version (replace with real auth later)
 app.get("/me", (req, res) => {
-    // TODO: Replace this with real authentication (Azure AD / Teams / etc.)
-    res.json({
-        id: "user-123",
-        email: "patrick.wann@malinusa.com",
-        name: "Patrick Wann",
-        photoUrl: null          // or a real photo URL if you have one
-    });
+  const email =
+    req.headers["x-ms-client-principal-name"] ||          // most common
+    req.headers["x-ms-client-principal-id"] ||
+    null;
+
+  const name =
+    req.headers["x-ms-client-principal-name"] ||           // often the email
+    "User";
+
+  // Optional: decode the full principal if present
+  let principal = null;
+  if (req.headers["x-ms-client-principal"]) {
+    try {
+      principal = JSON.parse(
+        Buffer.from(req.headers["x-ms-client-principal"], "base64").toString("utf8")
+      );
+    } catch (e) {}
+  }
+
+  res.json({
+    id: principal?.userId || email || "unknown",
+    email: email || "unknown@malinusa.com",
+    name: principal?.userDetails || name,
+    photoUrl: null
+  });
 });
 
 app.get("/test/request-lines", async (req, res) => {
