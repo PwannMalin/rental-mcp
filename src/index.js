@@ -181,22 +181,27 @@ app.get("/api/user-photo", async (req, res) => {
       return res.status(400).json({ error: "email required" });
     }
 
-    const url = `${process.env.pa_search_user}?email=${encodeURIComponent(email)}`;
-    console.log("Calling Power Automate URL:", url);   // ← helpful for debugging
+    const baseUrl = process.env.PA_UPDATE_SEARCH_URL;
+
+    if (!baseUrl) {
+      console.error("PA_UPDATE_SEARCH_URL is not defined");
+      return res.status(500).json({ error: "PA_UPDATE_SEARCH_URL is missing" });
+    }
+
+    const url = `${baseUrl}?email=${encodeURIComponent(email)}`;
+    console.log("Calling:", url);
 
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
-        // Add any required headers here (Authorization, etc.)
+        "Content-Type": "application/json"
+        // Add Authorization or other headers if the flow requires them
       }
     });
 
-    console.log("Power Automate status:", response.status);
-
     if (!response.ok) {
       const text = await response.text();
-      console.error("Power Automate error body:", text);
+      console.error("Power Automate error:", response.status, text);
       return res.status(response.status).json({ 
         error: "Power Automate request failed", 
         status: response.status,
@@ -206,7 +211,7 @@ app.get("/api/user-photo", async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-
+console.log("PA_UPDATE_SEARCH_URL =", process.env.PA_UPDATE_SEARCH_URL);
   } catch (err) {
     console.error("Proxy error:", err);
     res.status(500).json({ 
