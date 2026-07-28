@@ -68,7 +68,7 @@
             <!-- Welcome message -->
             <div class="flex gap-4 message-bubble">
                 <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
-                    <img src="/images/malin-logo.png" alt="Malin" class="w-full h-full object-contain p-1">
+                    <img src="/images/MalinLogo.png" alt="Malin" class="w-full h-full object-contain p-1">
                 </div>
                 <div class="max-w-[80%]">
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
@@ -134,9 +134,18 @@
 
 async function loadCurrentUser() {
     try {
-        const res = await fetch("/me");
+        const res = await fetch("/me");   // or your real user endpoint
         if (res.ok) {
-            currentUser = await res.json();
+            const data = await res.json();
+            const user = data.data?.[0] || data;
+
+            currentUser = {
+                id: user.Id,
+                email: user.Mail || user.UserPrincipalName,
+                name: user.DisplayName || "User",
+                photoUrl: getPhotoUrl(user)
+            };
+
             console.log("Current user loaded:", currentUser);
         }
     } catch (err) {
@@ -155,7 +164,7 @@ window.onload = async () => {
         function getMalinAvatar() {
             return `
                 <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
-                    <img src="/images/malin-logo.png" alt="Malin" class="w-full h-full object-contain p-1">
+                    <img src="/images/MalinLogo.png" alt="Malin" class="w-full h-full object-contain p-1">
                 </div>
             `;
         }
@@ -222,17 +231,31 @@ window.onload = async () => {
 
         // ========== Get User Photo ==========
         // Adjust this endpoint to match your real search/get user API
-        async function getUserPhoto(emailOrId) {
-            try {
-                const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
-                if (!res.ok) return null;
-                const data = await res.json();
-                return data.photoUrl || data.photo || data.avatar || null;
-            } catch (err) {
-                console.warn("Could not load user photo", err);
-                return null;
-            }
+        // ========== Get User Photo ==========
+async function getUserPhoto(emailOrId) {
+    try {
+        const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
+        if (!res.ok) return null;
+
+        const data = await res.json();
+
+        // Handle Power Automate style response
+        const user = data.data?.[0] || data.result?.data?.[0] || data;
+
+        // Convert base64 image to data URL
+        if (user?.image?.["$content"]) {
+            const contentType = user.image["$content-type"] || "image/jpeg";
+            return `data:${contentType};base64,${user.image["$content"]}`;
         }
+
+        // Fallback if the API already returns a normal URL
+        return user.photoUrl || user.photo || user.avatar || null;
+
+    } catch (err) {
+        console.warn("Could not load user photo", err);
+        return null;
+    }
+}
 
         // ========== Send Message ==========
         async function sendMessage() {
