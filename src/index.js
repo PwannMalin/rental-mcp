@@ -181,11 +181,11 @@ app.get("/api/user-photo", async (req, res) => {
       return res.status(400).json({ error: "email required" });
     }
 
-    const baseUrl = process.env.PA_UPDATE_SEARCH_URL;
+    const baseUrl = process.env.PA_SEARCH_USER_URL;
 
     if (!baseUrl) {
-      console.error("PA_UPDATE_SEARCH_URL is not defined");
-      return res.status(500).json({ error: "PA_UPDATE_SEARCH_URL is missing" });
+      console.error("PA_SEARCH_USER_URL is not defined");
+      return res.status(500).json({ error: "PA_SEARCH_USER_URL is missing" });
     }
 
     const url = `${baseUrl}?email=${encodeURIComponent(email)}`;
@@ -195,7 +195,6 @@ app.get("/api/user-photo", async (req, res) => {
       method: "GET",
       headers: {
         "Content-Type": "application/json"
-        // Add Authorization or other headers if the flow requires them
       }
     });
 
@@ -211,7 +210,7 @@ app.get("/api/user-photo", async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-console.log("PA_UPDATE_SEARCH_URL =", process.env.PA_UPDATE_SEARCH_URL);
+
   } catch (err) {
     console.error("Proxy error:", err);
     res.status(500).json({ 
