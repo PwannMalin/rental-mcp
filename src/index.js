@@ -173,6 +173,29 @@ app.get("/test/customer-search", async (req, res) => {
 
 });
 
+// routes or server file
+app.get("/api/user-photo", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const response = await fetch(`${process.env.pa_search_user}?email=${encodeURIComponent(email)}`, {
+      method: "GET",
+      headers: {
+        // add any required headers your Power Automate needs
+        "Content-Type": "application/json",
+        // "Authorization": "Bearer ..." if needed
+      }
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
 app.get("/test/search/all-equipment", async (req, res) => {
     const tool = toolSource["search_equipment"];
 
