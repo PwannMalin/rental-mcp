@@ -264,30 +264,15 @@ console.log("LOOKUPS TOOL CALLED");
 
 // Temporary simple version (replace with real auth later)
 app.get("/me", (req, res) => {
-  const email =
-    req.headers["x-ms-client-principal-name"] ||          // most common
-    req.headers["x-ms-client-principal-id"] ||
-    null;
-
-  const name =
-    req.headers["x-ms-client-principal-name"] ||           // often the email
-    "User";
-
-  // Optional: decode the full principal if present
-  let principal = null;
-  if (req.headers["x-ms-client-principal"]) {
-    try {
-      principal = JSON.parse(
-        Buffer.from(req.headers["x-ms-client-principal"], "base64").toString("utf8")
-      );
-    } catch (e) {}
-  }
+  console.log("=== ALL HEADERS ===");
+  console.log(JSON.stringify(req.headers, null, 2));
 
   res.json({
-    id: principal?.userId || email || "unknown",
-    email: email || "unknown@malinusa.com",
-    name: principal?.userDetails || name,
-    photoUrl: null
+    id: "debug",
+    email: "debug",
+    name: "Debug User",
+    photoUrl: null,
+    headers: req.headers          // this will show in the browser too
   });
 });
 
