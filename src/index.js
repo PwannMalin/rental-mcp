@@ -177,22 +177,42 @@ app.get("/test/customer-search", async (req, res) => {
 app.get("/api/user-photo", async (req, res) => {
   try {
     const email = req.query.email;
-    if (!email) return res.status(400).json({ error: "email required" });
+    if (!email) {
+      return res.status(400).json({ error: "email required" });
+    }
 
-    const response = await fetch(`${process.env.pa_search_user}?email=${encodeURIComponent(email)}`, {
+    const url = `${process.env.pa_search_user}?email=${encodeURIComponent(email)}`;
+    console.log("Calling Power Automate URL:", url);   // ← helpful for debugging
+
+    const response = await fetch(url, {
       method: "GET",
       headers: {
-        // add any required headers your Power Automate needs
         "Content-Type": "application/json",
-        // "Authorization": "Bearer ..." if needed
+        // Add any required headers here (Authorization, etc.)
       }
     });
 
+    console.log("Power Automate status:", response.status);
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Power Automate error body:", text);
+      return res.status(response.status).json({ 
+        error: "Power Automate request failed", 
+        status: response.status,
+        body: text 
+      });
+    }
+
     const data = await response.json();
     res.json(data);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch user" });
+    console.error("Proxy error:", err);
+    res.status(500).json({ 
+      error: "Failed to fetch user", 
+      message: err.message 
+    });
   }
 });
 
