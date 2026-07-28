@@ -124,6 +124,31 @@
     </div>
 
     <script>
+
+        let currentUser = {
+    id: null,
+    email: null,
+    name: "User",
+    photoUrl: null
+};
+
+async function loadCurrentUser() {
+    try {
+        const res = await fetch("/me");
+        if (res.ok) {
+            currentUser = await res.json();
+            console.log("Current user loaded:", currentUser);
+        }
+    } catch (err) {
+        console.warn("Could not load current user", err);
+    }
+}
+
+// Call it when the page loads
+window.onload = async () => {
+    await loadCurrentUser();
+    document.getElementById('message').focus();
+};
         const chat = document.getElementById('chat');
 
         // ========== Avatar Helpers ==========
@@ -211,40 +236,38 @@
 
         // ========== Send Message ==========
         async function sendMessage() {
-            const input = document.getElementById("message");
-            const text = input.value.trim();
-            if (!text) return;
+    const input = document.getElementById("message");
+    const text = input.value.trim();
+    if (!text) return;
 
-            // TODO: Replace with the real current user email/id from your auth system
-            const currentUserEmail = "current.user@malin.com";
+    // Use the real user photo if available
+    addMessage(text, true, currentUser.photoUrl);
+    input.value = "";
+    showTypingIndicator();
 
-            const userPhoto = await getUserPhoto(currentUserEmail);
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: text,
+                userId: currentUser.id,
+                email: currentUser.email
+            })
+        });
 
-            addMessage(text, true, userPhoto);
-            input.value = "";
-            showTypingIndicator();
+        const data = await response.json();
+        removeTyping();
+        addMessage(data.answer || "No response received.", false);
 
-            try {
-                const response = await fetch("/chat", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        message: text
-                    })
-                });
-
-                const data = await response.json();
-                removeTyping();
-                addMessage(data.answer || "No response received.", false);
-
-            } catch (err) {
-                removeTyping();
-                addMessage(`❌ Error: ${err.message}`, false);
-                console.error(err);
-            }
-        }
+    } catch (err) {
+        removeTyping();
+        addMessage(`❌ Error: ${err.message}`, false);
+        console.error(err);
+    }
+}
 
         // ========== Quick Actions ==========
         function quickAction(text) {
