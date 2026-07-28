@@ -181,8 +181,7 @@ app.get("/api/user-photo", async (req, res) => {
     }
 
     // Your full Power Automate URL (with sig)
-    const baseUrl = "https://prod-xx.westus.logic.azure.com:443/workflows/..../triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=XXXXX";
-
+    const baseUrl = "https://ce126b244728497ea65f5ba37c81e8.54.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/8b3491988bcf41a3ba3454181caec525/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=__0EQl_cI_SqN6UtvatzpNF4h81h9SV2VZjz2HfDNQ8"
     // Use SearchTerm instead of email
     const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
 
