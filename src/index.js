@@ -267,7 +267,7 @@ app.get("/me", (req, res) => {
     // TODO: Replace this with real authentication (Azure AD / Teams / etc.)
     res.json({
         id: "user-123",
-        email: "patrick.wann@malin.com",
+        email: "patrick.wann@malinusa.com",
         name: "Patrick Wann",
         photoUrl: null          // or a real photo URL if you have one
     });
