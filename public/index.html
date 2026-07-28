@@ -159,7 +159,7 @@ async function loadCurrentUser() {
 
 async function getUserPhoto(emailOrId) {
     try {
-        const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
+        const res = await fetch(`/api/user-photo?email=${encodeURIComponent(emailOrId)}`);
         if (!res.ok) return null;
 
         const data = await res.json();
