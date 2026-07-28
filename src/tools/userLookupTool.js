@@ -43,7 +43,7 @@ export function userLookupTool(context = {}) {
             };
 
             const result = await callPowerAutomate({
-                url: process.env.PA_UPDATE_USER_URL,
+                url: process.env.PA_SEARCH_USER_URL,
                 payload,
                 flowName: "FindUser"
             });
