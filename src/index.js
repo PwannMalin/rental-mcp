@@ -173,7 +173,6 @@ app.get("/test/customer-search", async (req, res) => {
 
 });
 
-// routes or server file
 app.get("/api/user-photo", async (req, res) => {
   try {
     const email = req.query.email;
@@ -181,14 +180,11 @@ app.get("/api/user-photo", async (req, res) => {
       return res.status(400).json({ error: "email required" });
     }
 
-    const baseUrl = "https://ce126b244728497ea65f5ba37c81e8.54.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/8b3491988bcf41a3ba3454181caec525/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=__0EQl_cI_SqN6UtvatzpNF4h81h9SV2VZjz2HfDNQ8";
+    // Your full Power Automate URL (with sig)
+    const baseUrl = "https://ce126b244728497ea65f5ba37c81e8.54.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/8b3491988bcf41a3ba3454181caec525/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=__0EQl_cI_SqN6UtvatzpNF4h81h9SV2VZjz2HfDNQ8"
+    // Use SearchTerm instead of email
+    const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
 
-    if (!baseUrl) {
-      console.error("PA_SEARCH_USER_URL is not defined");
-      return res.status(500).json({ error: "PA_SEARCH_USER_URL is missing" });
-    }
-
-    const url = `${baseUrl}?email=${encodeURIComponent(email)}`;
     console.log("Calling:", url);
 
     const response = await fetch(url, {
