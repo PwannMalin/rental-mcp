@@ -33,7 +33,9 @@ export function emailTool(context = {}) {
                 input.recipient ||
                 (Array.isArray(input.to) ? input.to.join(";") : input.to) ||
                 "";
-
+console.log("[email.send] handler invoked");
+console.log("[email.send] input:", JSON.stringify(input, null, 2));
+console.log("[email.send] has PA_UPDATE_EMAIL_URL:", !!process.env.PA_UPDATE_EMAIL_URL);
             const payload = {
                 Recipient: recipient,
                 Subject: input.Subject || input.subject || "",

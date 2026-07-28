@@ -33,7 +33,10 @@ export function userLookupTool(context = {}) {
                 input.name ||
                 input.query ||
                 "";
-
+console.log("[user.lookup] handler invoked");
+console.log("[user.lookup] input:", JSON.stringify(input, null, 2));
+console.log("[user.lookup] SearchTerm:", SearchTerm);
+console.log("[user.lookup] has PA_SEARCH_USER_URL:", !!process.env.PA_SEARCH_USER_URL);
             if (!SearchTerm) {
                 throw new Error("SearchTerm is required for user lookup.");
             }
