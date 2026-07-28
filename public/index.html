@@ -125,77 +125,71 @@
 
    <script>
     let currentUser = {
-        id: null,
-        email: null,
-        name: "User",
-        photoUrl: null
-    };
+    id: null,
+    email: null,
+    name: "User",
+    photoUrl: null
+};
 
-    // ========== Load current user + photo ==========
-    async function loadCurrentUser() {
-        try {
-            const res = await fetch("/me");
-            if (!res.ok) throw new Error("Failed to load /me");
+async function loadCurrentUser() {
+    try {
+        const res = await fetch("/me");
+        if (!res.ok) throw new Error("Failed to load /me");
 
-            const data = await res.json();
-            const user = data.data?.[0] || data;
+        const data = await res.json();
+        const user = data.data?.[0] || data;
 
-            currentUser = {
-                id: user.Id || user.id,
-                email: user.Mail || user.UserPrincipalName || user.email,
-                name: user.DisplayName || user.name || "User",
-                photoUrl: null
-            };
+        currentUser = {
+            id: user.Id || user.id,
+            email: user.Mail || user.UserPrincipalName || user.email,
+            name: user.DisplayName || user.name || "User",
+            photoUrl: null
+        };
 
-            // Try to get photo
-            if (currentUser.email || currentUser.id) {
-                currentUser.photoUrl = await getUserPhoto(currentUser.email || currentUser.id);
-            }
-
-            console.log("Current user loaded:", currentUser);
-        } catch (err) {
-            console.warn("Could not load current user", err);
+        // Load the photo using the email from /me
+        if (currentUser.email) {
+            currentUser.photoUrl = await getUserPhoto(currentUser.email);
         }
+
+        console.log("Current user loaded:", currentUser);
+    } catch (err) {
+        console.warn("Could not load current user", err);
     }
+}
 
-    // ========== Get User Photo ==========
-    async function getUserPhoto(emailOrId) {
-        try {
-            const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
-            if (!res.ok) return null;
+async function getUserPhoto(emailOrId) {
+    try {
+        const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
+        if (!res.ok) return null;
 
-            const data = await res.json();
-            const user = data.data?.[0] || data.result?.data?.[0] || data;
+        const data = await res.json();
+        const user = data.data?.[0] || data;
 
-            // Power Automate / base64 style
-            if (user?.image?.["$content"]) {
-                const contentType = user.image["$content-type"] || "image/jpeg";
-                return `data:${contentType};base64,${user.image["$content"]}`;
-            }
-
-            // Direct URL styles
-            return user.photoUrl || user.photo || user.avatar || user.imageUrl || null;
-        } catch (err) {
-            console.warn("Could not load user photo", err);
-            return null;
+        if (user?.image?.["$content"]) {
+            const contentType = user.image["$content-type"] || "image/jpeg";
+            return `data:${contentType};base64,${user.image["$content"]}`;
         }
-    }
 
-    // ========== Avatar Helpers ==========
-    function getMalinAvatar() {
+        return user.photoUrl || user.photo || user.avatar || null;
+    } catch (err) {
+        console.warn("Could not load user photo", err);
+        return null;
+    }
+}
+
+function getUserAvatar(photoUrl) {
+    if (photoUrl) {
         return `
-            <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
-                <img src="/images/MalinLogo.png" alt="Malin" class="w-full h-full object-contain p-1">
-            </div>
+            <img src="${photoUrl}" 
+                 class="w-9 h-9 rounded-2xl object-cover flex-shrink-0" 
+                 alt="User"
+                 onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">
         `;
     }
-
-    function getUserAvatar(photoUrl) {
-        if (photoUrl) {
-            return `<img src="${photoUrl}" class="w-9 h-9 rounded-2xl object-cover flex-shrink-0" alt="User" onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">`;
-        }
-        return `<div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">U</div>`;
-    }
+    return `<div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">U</div>`;
+}
+    // ========== Get User Photo ==========
+   
 
     // ========== Add Message ==========
     function addMessage(text, isUser, userPhotoUrl = null) {
