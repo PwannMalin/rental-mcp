@@ -658,7 +658,7 @@ formatRequestLinesAnswer(rows, userText = "") {
         return builtTools;
     }
 
-    buildSystemPrompt(userId, tenantId) {
+  buildSystemPrompt(userId, tenantId) {
     const memory = this.memory?.get?.(userId, tenantId) || {
         customers: [],
         rentals: [],
@@ -666,48 +666,45 @@ formatRequestLinesAnswer(rows, userText = "") {
         context: {}
     };
 
-    // Build schema section dynamically
-    let schemaSection = "";
-    if (this.discoveredSchemas) {
-        for (const [type, fields] of Object.entries(this.discoveredSchemas)) {
-            if (fields && fields.length) {
-                schemaSection += `\n### ${type} fields: ${fields.join(", ")}`;
-            }
-        }
-    }
+    const lastDomain = memory.context?.lastSearchDomain || "none";
+    const lastParams = memory.context?.lastSearchParams || {};
 
     return [
         {
             role: "system",
             content: `
-You are a helpful Rental Assistant for internal users.
+You are a helpful internal Rental Assistant.
 
 ### Critical Tool Rules
-- When calling search.execute you MUST always include the "type" parameter.
+- Always include the "type" parameter when calling search.execute.
 - Valid types: CUSTOMER, RENTAL, REQUEST_LINES, EQUIPMENT
-- Correct example: { "type": "CUSTOMER", "filterQuery": "contains(CustomerName,'Clampitt')" }
-- Incorrect example: { "filterQuery": "contains(CustomerName,'Clampitt')" }
+- Correct: { "type": "CUSTOMER", "filterQuery": "contains(CustomerName,'Clampitt')" }
+- Incorrect: { "filterQuery": "contains(CustomerName,'Clampitt')" }
 
 ### Business Rules
-- Always search CUSTOMER first when the user only gives a customer name.
-- Never search RENTAL using CustomerName — use CustomerNumber instead.
-- If multiple customers are found, present the options and ask the user to choose.
-- Preserve existing filterQuery values. Do not overwrite them with empty SearchTerm.
+- Customer name only → search CUSTOMER first
+- Customer number → search RENTAL using CustomerNumber
+- Equipment serial / series / model → search EQUIPMENT or REQUEST_LINES
+- Never search RENTAL using CustomerName
+
+### Conversation Context (very important)
+- Current last search domain: ${lastDomain}
+- Last search parameters: ${JSON.stringify(lastParams)}
+- Keep the same domain unless the user clearly changes topic.
+- Example: if previous turn was about equipment and user says "oh chargers", stay in EQUIPMENT domain.
+- Do not switch domains on short ambiguous replies.
 
 ### Memory
-Recent customers:
-${JSON.stringify(memory.customers.slice(0, 5), null, 2)}
+Recent customers: ${JSON.stringify(memory.customers.slice(0, 4))}
+Recent rentals: ${JSON.stringify(memory.rentals.slice(0, 4))}
+Recent actions: ${JSON.stringify(memory.lastActions.slice(0, 4))}
 
-Recent rentals:
-${JSON.stringify(memory.rentals.slice(0, 5), null, 2)}
-
-Recent actions:
-${JSON.stringify(memory.lastActions.slice(0, 5), null, 2)}
-${schemaSection}
-
-Be concise, accurate, and use tools when needed. Never invent customer or rental data.
+### Response Rules
+- Be concise and specific.
+- When no results are found, say what you searched and suggest a next step.
+- Avoid repeating the exact same search.
+- Ask clarifying questions when the request is ambiguous.
             `.trim()
         }
     ];
-}
-}
+}}
