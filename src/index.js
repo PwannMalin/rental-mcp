@@ -219,6 +219,17 @@ console.log("LOOKUPS TOOL CALLED");
 
 });
 
+// Temporary simple version (replace with real auth later)
+app.get("/me", (req, res) => {
+    // TODO: Replace this with real authentication (Azure AD / Teams / etc.)
+    res.json({
+        id: "user-123",
+        email: "patrick.wann@malin.com",
+        name: "Patrick Wann",
+        photoUrl: null          // or a real photo URL if you have one
+    });
+});
+
 app.get("/test/request-lines", async (req, res) => {
 
     const tool = toolSource["search.execute"];

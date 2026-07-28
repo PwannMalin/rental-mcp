@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         
         body {
             font-family: 'Inter', system-ui, sans-serif;
@@ -41,8 +41,8 @@
         <!-- HEADER -->
         <div class="bg-zinc-950 border-b border-zinc-700 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex items-center justify-center text-white font-bold text-2xl">
-                    M
+                <div class="w-9 h-9 rounded-2xl overflow-hidden bg-white flex items-center justify-center">
+                    <img src="/images/malin-logo.png" alt="Malin" class="w-full h-full object-contain p-1">
                 </div>
                 <div>
                     <h1 class="text-xl font-semibold">Malin Internal Rental MCP</h1>
@@ -65,9 +65,10 @@
         <!-- CHAT AREA -->
         <div id="chat" class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin">
             
+            <!-- Welcome message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">
-                    🏗️
+                <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
+                    <img src="/images/malin-logo.png" alt="Malin" class="w-full h-full object-contain p-1">
                 </div>
                 <div class="max-w-[80%]">
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
@@ -123,23 +124,67 @@
     </div>
 
     <script>
+
+        let currentUser = {
+    id: null,
+    email: null,
+    name: "User",
+    photoUrl: null
+};
+
+async function loadCurrentUser() {
+    try {
+        const res = await fetch("/me");
+        if (res.ok) {
+            currentUser = await res.json();
+            console.log("Current user loaded:", currentUser);
+        }
+    } catch (err) {
+        console.warn("Could not load current user", err);
+    }
+}
+
+// Call it when the page loads
+window.onload = async () => {
+    await loadCurrentUser();
+    document.getElementById('message').focus();
+};
         const chat = document.getElementById('chat');
-        
-        function addMessage(text, isUser) {
+
+        // ========== Avatar Helpers ==========
+        function getMalinAvatar() {
+            return `
+                <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
+                    <img src="/images/malin-logo.png" alt="Malin" class="w-full h-full object-contain p-1">
+                </div>
+            `;
+        }
+
+        function getUserAvatar(photoUrl) {
+            if (photoUrl) {
+                return `<img src="${photoUrl}" class="w-9 h-9 rounded-2xl object-cover flex-shrink-0" alt="User">`;
+            }
+            // Fallback initial
+            return `<div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">U</div>`;
+        }
+
+        // ========== Add Message ==========
+        function addMessage(text, isUser, userPhotoUrl = null) {
             const div = document.createElement('div');
             div.className = `flex ${isUser ? 'justify-end' : 'gap-4'} message-bubble`;
-            
+
             if (isUser) {
                 div.innerHTML = `
-                    <div class="max-w-[75%]">
+                    <div class="flex items-end gap-3 max-w-[80%]">
                         <div class="user-bubble rounded-3xl rounded-tr-none px-5 py-3.5 text-sm">
                             ${text}
                         </div>
+                        ${getUserAvatar(userPhotoUrl)}
                     </div>
                 `;
             } else {
                 div.innerHTML = `
-                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
+                    ${getMalinAvatar()}
                     <div class="max-w-[75%]">
                         <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm">
                             ${text}
@@ -147,19 +192,21 @@
                     </div>
                 `;
             }
+
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
         }
-        
+
+        // ========== Typing Indicator ==========
         function showTypingIndicator() {
             const html = `
                 <div class="flex gap-4" id="typing">
-                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
+                    ${getMalinAvatar()}
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
                         <div class="flex gap-1">
                             <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
-                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-150"></div>
-                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-300"></div>
+                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></div>
+                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
                         </div>
                     </div>
                 </div>
@@ -167,85 +214,78 @@
             chat.insertAdjacentHTML('beforeend', html);
             chat.scrollTop = chat.scrollHeight;
         }
-        
+
         function removeTyping() {
             const el = document.getElementById('typing');
             if (el) el.remove();
         }
-        
+
+        // ========== Get User Photo ==========
+        // Adjust this endpoint to match your real search/get user API
+        async function getUserPhoto(emailOrId) {
+            try {
+                const res = await fetch(`/api/user?email=${encodeURIComponent(emailOrId)}`);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.photoUrl || data.photo || data.avatar || null;
+            } catch (err) {
+                console.warn("Could not load user photo", err);
+                return null;
+            }
+        }
+
+        // ========== Send Message ==========
         async function sendMessage() {
-
-    const input =
-        document.getElementById("message");
-
-    const text =
-        input.value.trim();
-
+    const input = document.getElementById("message");
+    const text = input.value.trim();
     if (!text) return;
 
-    addMessage(text, true);
-
+    // Use the real user photo if available
+    addMessage(text, true, currentUser.photoUrl);
     input.value = "";
-
     showTypingIndicator();
 
     try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: text,
+                userId: currentUser.id,
+                email: currentUser.email
+            })
+        });
 
-        const response = await fetch(
-            "/chat",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: text
-                })
-            }
-        );
-
-        const data =
-            await response.json();
-
+        const data = await response.json();
         removeTyping();
-
-        addMessage(
-            data.answer ||
-            "No response received.",
-            false
-        );
+        addMessage(data.answer || "No response received.", false);
 
     } catch (err) {
-
         removeTyping();
-
-        addMessage(
-            `❌ Error: ${err.message}`,
-            false
-        );
-
+        addMessage(`❌ Error: ${err.message}`, false);
         console.error(err);
     }
 }
-        
+
+        // ========== Quick Actions ==========
         function quickAction(text) {
+            document.getElementById("message").value = text;
+            sendMessage();
+        }
 
-    document.getElementById(
-        "message"
-    ).value = text;
-
-    sendMessage();
-}
-        
+        // ========== Attach File ==========
         function attachFile() {
             alert("📎 Attachment uploaded (Internal System)\n\nYou can attach PO, site photos, or spec sheets.");
         }
-        
+
+        // ========== Clear Chat ==========
         function clearChat() {
             if (confirm("Clear this chat session?")) {
                 chat.innerHTML = `
                     <div class="flex gap-4 message-bubble">
-                        <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
+                        ${getMalinAvatar()}
                         <div class="max-w-[80%]">
                             <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
                                 Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
@@ -256,7 +296,7 @@
                 `;
             }
         }
-        
+
         // Initialize
         window.onload = () => document.getElementById('message').focus();
     </script>

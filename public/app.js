@@ -18,6 +18,7 @@ async function sendMessage() {
 
     const text =
         input.value;
+// Example – call your existing search/get user endpoint
 
     if (!text) return;
 
