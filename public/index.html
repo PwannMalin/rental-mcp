@@ -169,6 +169,7 @@ async function loadCurrentUser() {
 
         const data = await res.json();
         const user = data.data?.[0] || data;
+    console.log("ME RESPONSE:", data);
 
         currentUser = {
             id: user.Id || user.id || null,
