@@ -278,12 +278,20 @@ app.get("/me", async (req, res) => {
 const user =
 result?.data?.result?.data?.[0];
 
+if (!user) {
+    return res.status(404).json({
+        error: "User not found"
+    });
+}
+
 res.json({
 id: user?.Id,
 email: user?.Mail,
 name: user?.DisplayName,
 photoUrl:
-`data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+user?.image?.["$content"]
+? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+: null
 });
 });
 
