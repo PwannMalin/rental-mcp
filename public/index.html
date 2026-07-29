@@ -68,6 +68,10 @@
                         class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-zinc-800 transition-colors text-sm">
                     <i class="fas fa-trash"></i>
                 </button>
+                <button onclick="login()" 
+        class="text-sm bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-xl transition-colors">
+    Sign in
+</button>
             </div>
         </div>
 
@@ -170,25 +174,16 @@ async function getCurrentAccount() {
         msalInitialized = true;
     }
 
-    // Handle redirect if present
+    // Handle redirect if you ever switch to redirect flow
     try {
         const response = await msalInstance.handleRedirectPromise();
-        if (response) {
-            return response.account;
-        }
+        if (response) return response.account;
     } catch (e) {
         console.warn("Redirect handling error", e);
     }
 
-    let account = msalInstance.getAllAccounts()[0];
-
-    if (!account) {
-        // Use popup for simplicity
-        const result = await msalInstance.loginPopup(loginRequest);
-        account = result.account;
-    }
-
-    return account;
+    // Only return an already-signed-in account
+    return msalInstance.getAllAccounts()[0] || null;
 }
 
 // ========== Helpers ==========
@@ -231,9 +226,15 @@ function getUserAvatar(photoUrl) {
 async function loadCurrentUser() {
     try {
         const account = await getCurrentAccount();
+
+        if (!account) {
+            console.log("No signed-in account yet");
+            currentUser = { id: null, email: null, name: "User", photoUrl: null };
+            return;
+        }
+
         console.log("MSAL account:", account);
 
-        // Call your backend with the real email from MSAL
         const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
         if (!response.ok) throw new Error("Failed to load /me");
 
@@ -247,7 +248,6 @@ async function loadCurrentUser() {
             photoUrl: user.photoUrl || null
         };
 
-        // Optional: if /me didn't return a photo, try the dedicated photo endpoint
         if (!currentUser.photoUrl && currentUser.email) {
             currentUser.photoUrl = await getUserPhoto(currentUser.email);
         }
@@ -402,7 +402,7 @@ function clearChat() {
 
 // ========== Initialize ==========
 window.onload = async () => {
-    await loadCurrentUser();
+    await loadCurrentUser();          // only loads if already signed in
     document.getElementById("message").focus();
 };
 </script>
