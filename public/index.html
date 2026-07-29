@@ -6,14 +6,9 @@
     <title>Malin Internal Rental MCP</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://alcdn.msauth.net/browser/3.30.0/js/msal-browser.min.js" ></script>
-<script>
-console.log("MSAL OBJECT:", window.msal);
-
-
-
-
-</script>
+    <script src="https://alcdn.msauth.net/browser/3.30.0/js/msal-browser.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="/images/MalinLogo.png">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 
@@ -137,7 +132,6 @@ console.log("MSAL OBJECT:", window.msal);
     </div>
 
   <script>
-
 console.log("SCRIPT STARTED");
 
 let currentUser = {
@@ -149,6 +143,54 @@ let currentUser = {
 
 const chat = document.getElementById("chat");
 
+// ========== MSAL Setup ==========
+const msalConfig = {
+    auth: {
+        clientId: "193e3b30-e9cd-43a8-9a03-a32b1b22cf5f",
+        authority: "https://login.microsoftonline.com/20bd77a5-e148-4b27-bed3-93baf486481b",
+        redirectUri: window.location.origin
+    },
+    cache: {
+        cacheLocation: "sessionStorage",
+        storeAuthStateInCookie: false
+    }
+};
+
+const loginRequest = {
+    scopes: ["User.Read"]
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+let msalInitialized = false;
+
+async function getCurrentAccount() {
+    if (!msalInitialized) {
+        await msalInstance.initialize();
+        msalInitialized = true;
+    }
+
+    // Handle redirect if present
+    try {
+        const response = await msalInstance.handleRedirectPromise();
+        if (response) {
+            return response.account;
+        }
+    } catch (e) {
+        console.warn("Redirect handling error", e);
+    }
+
+    let account = msalInstance.getAllAccounts()[0];
+
+    if (!account) {
+        // Use popup for simplicity
+        const result = await msalInstance.loginPopup(loginRequest);
+        account = result.account;
+    }
+
+    return account;
+}
+
+// ========== Helpers ==========
 function escapeHtml(value) {
     return String(value)
         .replaceAll("&", "&amp;")
@@ -161,78 +203,58 @@ function escapeHtml(value) {
 function getMalinAvatar() {
     return `
         <div class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0">
-            <img
-                src="/images/malincubelogo2.png"
-                alt="Malin"
-                class="h-7 w-auto object-contain"
-            />
+            <img src="/images/MalinLogo.png" alt="Malin" class="h-7 w-auto object-contain">
         </div>
     `;
 }
 
-let msalInitialized = false;
-
-const loginRequest = {
-    scopes: ["User.Read"]
-};
-
-async function getCurrentAccount() {
-    if (!msalInitialized) {
-        await msalInstance.initialize();
-        msalInitialized = true;
+function getUserAvatar(photoUrl) {
+    if (photoUrl) {
+        return `
+            <img src="${photoUrl}"
+                 class="w-9 h-9 rounded-2xl object-cover flex-shrink-0"
+                 alt="User"
+                 onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">
+        `;
     }
 
-    let account =
-        msalInstance.getAllAccounts()[0];
-
-    if (!account) {
-        const result =
-            await msalInstance.loginPopup(loginRequest);
-
-        account = result.account;
-    }
-
-    return account;
+    const initial = escapeHtml(currentUser.name?.charAt(0) || "U");
+    return `
+        <div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">
+            ${initial}
+        </div>
+    `;
 }
 
+// ========== Load current user (dynamic email) ==========
 async function loadCurrentUser() {
-
-    
     try {
         const account = await getCurrentAccount();
-
         console.log("MSAL account:", account);
 
-        const response = await fetch(
-            `/me?email=${encodeURIComponent(account.username)}`
-        );
-
-        if (!response.ok) {
-            throw new Error("Failed to load /me");
-        }
+        // Call your backend with the real email from MSAL
+        const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
+        if (!response.ok) throw new Error("Failed to load /me");
 
         const user = await response.json();
-
         console.log("ME RESPONSE:", user);
 
         currentUser = {
             id: user.id || null,
-            email: user.email || null,
+            email: user.email || account.username,
             name: user.name || account.name || "User",
             photoUrl: user.photoUrl || null
         };
 
-        console.log("Current user loaded:", currentUser);
+        // Optional: if /me didn't return a photo, try the dedicated photo endpoint
+        if (!currentUser.photoUrl && currentUser.email) {
+            currentUser.photoUrl = await getUserPhoto(currentUser.email);
+        }
 
+        console.log("Current user loaded:", currentUser);
     } catch (err) {
         console.warn("Could not load current user", err);
-
-        currentUser = {
-            id: null,
-            email: null,
-            name: "User",
-            photoUrl: null
-        };
+        currentUser = { id: null, email: null, name: "User", photoUrl: null };
     }
 }
 
@@ -256,28 +278,9 @@ async function getUserPhoto(emailOrId) {
     }
 }
 
-function getUserAvatar(photoUrl) {
-    if (photoUrl) {
-        return `
-            <img src="${photoUrl}" 
-                 class="w-9 h-9 rounded-2xl object-cover flex-shrink-0" 
-                 alt="User"
-                 onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">
-        `;
-    }
-
-    const initial = escapeHtml(currentUser.name?.charAt(0) || "U");
-
-    return `
-        <div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">
-            ${initial}
-        </div>
-    `;
-}
-
+// ========== Chat UI ==========
 function addMessage(text, isUser, userPhotoUrl = null) {
     const safeText = escapeHtml(text).replaceAll("\n", "<br>");
-
     const div = document.createElement("div");
     div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
 
@@ -318,7 +321,6 @@ function showTypingIndicator() {
             </div>
         </div>
     `;
-
     chat.insertAdjacentHTML("beforeend", html);
     chat.scrollTop = chat.scrollHeight;
 }
@@ -331,18 +333,19 @@ function removeTyping() {
 async function sendMessage() {
     const input = document.getElementById("message");
     const text = input.value.trim();
-
     if (!text) return;
 
     addMessage(text, true, currentUser.photoUrl);
     input.value = "";
     showTypingIndicator();
-console.log("Sending chat request:", {
-    message: text,
-    userId: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name
-});
+
+    console.log("Sending chat request:", {
+        message: text,
+        userId: currentUser.id,
+        email: currentUser.email,
+        name: currentUser.name
+    });
+
     try {
         const response = await fetch("/chat", {
             method: "POST",
@@ -356,7 +359,6 @@ console.log("Sending chat request:", {
         });
 
         const data = await response.json();
-
         removeTyping();
 
         if (!response.ok) {
@@ -397,6 +399,7 @@ function clearChat() {
     }
 }
 
+// ========== Initialize ==========
 window.onload = async () => {
     await loadCurrentUser();
     document.getElementById("message").focus();

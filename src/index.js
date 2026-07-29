@@ -267,13 +267,9 @@ console.log("LOOKUPS TOOL CALLED");
 
 // Temporary simple version (replace with real auth later)
 app.get("/me", async (req, res) => {
-
     const email = req.query.email;
-
     if (!email) {
-        return res.status(400).json({
-            error: "email required"
-        });
+        return res.status(400).json({ error: "email required" });
     }
 
     const result = await registry.execute(
