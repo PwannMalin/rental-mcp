@@ -175,7 +175,7 @@ async function loadCurrentUser() {
             id: user.Id || user.id || null,
             email: user.Mail || user.UserPrincipalName || user.email || null,
             name: user.DisplayName || user.name || "User",
-            photoUrl: null
+            photoUrl: user.photoUrl || user.photo || user.avatar || null
         };
 
         if (currentUser.email) {
