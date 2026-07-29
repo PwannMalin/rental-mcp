@@ -181,8 +181,9 @@ app.get("/api/user-photo", async (req, res) => {
     }
 
     // Your full Power Automate URL (with sig)
-    const baseUrl = "https://ce126b244728497ea65f5ba37c81e8.54.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/8b3491988bcf41a3ba3454181caec525/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=__0EQl_cI_SqN6UtvatzpNF4h81h9SV2VZjz2HfDNQ8"
-    // Use SearchTerm instead of email
+    const baseUrl =
+    process.env.PA_SEARCH_USER_URL;
+// Use SearchTerm instead of email
     const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
 
     console.log("Calling:", url);
@@ -264,16 +265,7 @@ console.log("LOOKUPS TOOL CALLED");
 
 // Temporary simple version (replace with real auth later)
 app.get("/me", (req, res) => {
-  console.log("=== ALL HEADERS ===");
-  console.log(JSON.stringify(req.headers, null, 2));
-
-  res.json({
-    id: "debug",
-    email: "debug",
-    name: "Debug User",
-    photoUrl: null,
-    headers: req.headers          // this will show in the browser too
-  });
+    res.json(req.headers);
 });
 
 app.get("/test/request-lines", async (req, res) => {
