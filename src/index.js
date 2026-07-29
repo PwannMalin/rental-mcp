@@ -264,8 +264,20 @@ console.log("LOOKUPS TOOL CALLED");
 });
 
 // Temporary simple version (replace with real auth later)
-app.get("/me", (req, res) => {
-    res.json(req.headers);
+app.get("/me", async (req, res) => {
+
+    console.log("Looking up current user");
+
+    const result =
+        await registry.execute(
+            "search.execute",
+            {
+                type: "USER",
+                SearchTerm: "Patrick Wann"
+            }
+        );
+
+    res.json(result);
 });
 
 app.get("/test/request-lines", async (req, res) => {
