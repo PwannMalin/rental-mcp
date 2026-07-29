@@ -6,7 +6,7 @@
     <title>Malin Internal Rental MCP</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-
+<script src="https://alcdn.msauth.net/browser/3.30.0/js/msal-browser.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 
     
@@ -72,9 +72,9 @@
             
             <!-- Welcome message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
-                    <img src="/images/MalinLogo.png" alt="Malin" class="w-full h-full object-contain p-1">
-                </div>
+                <div class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0">
+    <img src="/images/MalinLogo.png" alt="Malin" class="h-7 w-auto object-contain">
+</div>
                 <div class="max-w-[80%]">
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
                         Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
@@ -152,49 +152,92 @@ function escapeHtml(value) {
 
 function getMalinAvatar() {
     return `
-        <div class="w-9 h-9 rounded-2xl flex-shrink-0 overflow-hidden bg-white">
-    <img
-        src="/images/MalinLogo.png"
-        alt="Malin"
-        class="h-7 w-auto object-contain"
-    >
-</div>
+        <div class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0">
+            <img
+                src="/images/MalinLogo.png"
+                alt="Malin"
+                class="h-7 w-auto object-contain"
+            />
+        </div>
     `;
 }
 
+const msalConfig = {
+    auth: {
+        clientId: "193e3b30-e9cd-43a8-9a03-a32b1b22cf5f",
+        authority: "https://login.microsoftonline.com/20bd77a5-e148-4b27-bed3-93baf486481b",
+        redirectUri: window.location.origin
+    },
+    cache: {
+        cacheLocation: "sessionStorage",
+        storeAuthStateInCookie: false
+    }
+};
+
+const loginRequest = {
+    scopes: ["User.Read"]
+};
+
+const msalInstance =
+    new msal.PublicClientApplication(msalConfig);
+
+let msalInitialized = false;
+
+async function getCurrentAccount() {
+    if (!msalInitialized) {
+        await msalInstance.initialize();
+        msalInitialized = true;
+    }
+
+    let account =
+        msalInstance.getAllAccounts()[0];
+
+    if (!account) {
+        const result =
+            await msalInstance.loginPopup(loginRequest);
+
+        account = result.account;
+    }
+
+    return account;
+}
+
 async function loadCurrentUser() {
-
-    const account = await getCurrentAccount();
-
-const response = await fetch(
-    `/me?email=${encodeURIComponent(account.username)}`
-);
-
-const user = await response.json();
-
-console.log(user);
     try {
-        const res = await fetch("/me");
-        if (!res.ok) throw new Error("Failed to load /me");
+        const account = await getCurrentAccount();
 
-        const data = await res.json();
-        const user = data.data?.[0] || data;
-    console.log("ME RESPONSE:", data);
+        console.log("MSAL account:", account);
 
-        currentUser = {
-            id: user.Id || user.id || null,
-            email: user.Mail || user.UserPrincipalName || user.email || null,
-            name: user.DisplayName || user.name || "User",
-            photoUrl: user.photoUrl || user.photo || user.avatar || null
-        };
+        const response = await fetch(
+            `/me?email=${encodeURIComponent(account.username)}`
+        );
 
-        if (currentUser.email) {
-            currentUser.photoUrl = await getUserPhoto(currentUser.email);
+        if (!response.ok) {
+            throw new Error("Failed to load /me");
         }
 
+        const user = await response.json();
+
+        console.log("ME RESPONSE:", user);
+
+        currentUser = {
+            id: user.id || null,
+            email: user.email || null,
+            name: user.name || account.name || "User",
+            photoUrl: user.photoUrl || null
+        };
+
         console.log("Current user loaded:", currentUser);
+
     } catch (err) {
         console.warn("Could not load current user", err);
+
+        currentUser = {
+            id: null,
+            email: null,
+            name: "User",
+            photoUrl: null
+        };
     }
 }
 
