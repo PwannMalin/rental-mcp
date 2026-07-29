@@ -275,9 +275,16 @@ app.get("/me", async (req, res) => {
     }
 );
 
-console.log(JSON.stringify(result, null, 2));
+const user =
+result?.data?.result?.data?.[0];
 
-    res.json(result);
+res.json({
+id: user?.Id,
+email: user?.Mail,
+name: user?.DisplayName,
+photoUrl:
+`data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+});
 });
 
 app.get("/test/request-lines", async (req, res) => {
