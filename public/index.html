@@ -163,6 +163,16 @@ function getMalinAvatar() {
 }
 
 async function loadCurrentUser() {
+
+    const account = await getCurrentAccount();
+
+const response = await fetch(
+    `/me?email=${encodeURIComponent(account.username)}`
+);
+
+const user = await response.json();
+
+console.log(user);
     try {
         const res = await fetch("/me");
         if (!res.ok) throw new Error("Failed to load /me");

@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@azure/msal-browser": "^5.17.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "axios": "^1.18.0",
     "botbuilder": "^4.23.3",
