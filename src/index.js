@@ -268,31 +268,41 @@ app.get("/me", async (req, res) => {
 
     console.log("Looking up current user");
 
-   const result = await registry.execute(
-    "user.lookup",
-    {
-        SearchTerm: "Patrick Wann"
+    const result = await registry.execute(
+        "user.lookup",
+        {
+            SearchTerm: "Patrick Wann"
+        }
+    );
+
+    console.log(
+        "USER LOOKUP:",
+        JSON.stringify(result, null, 2)
+    );
+
+    const user =
+        result?.data?.result?.data?.data?.[0];
+
+    console.log(
+        "FOUND USER:",
+        JSON.stringify(user, null, 2)
+    );
+
+    if (!user) {
+        return res.status(404).json({
+            error: "User not found"
+        });
     }
-);
 
-const user =
-result?.data?.result?.data?.[0];
-
-if (!user) {
-    return res.status(404).json({
-        error: "User not found"
+    res.json({
+        id: user.Id,
+        email: user.Mail,
+        name: user.DisplayName,
+        photoUrl:
+            user.image?.["$content"]
+                ? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+                : null
     });
-}
-
-res.json({
-id: user?.Id,
-email: user?.Mail,
-name: user?.DisplayName,
-photoUrl:
-user?.image?.["$content"]
-? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
-: null
-});
 });
 
 app.get("/test/request-lines", async (req, res) => {
