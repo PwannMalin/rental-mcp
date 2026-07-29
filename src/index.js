@@ -161,14 +161,13 @@ app.get("/test/github/list-branches", async (req, res) => {
 
 app.get("/test/customer-search", async (req, res) => {
 
-   const result = await registry.execute(
-    "user.lookup",
-    {
-        SearchTerm: "Patrick Wann"
-    }
-);
-
-console.log(JSON.stringify(result, null, 2));
+    const result = await registry.execute(
+        "search.execute",
+        {
+            type: "CUSTOMER",
+            SearchTerm: req.query.customer || "Amazon"
+        }
+    );
 
     res.json(result);
 
@@ -269,14 +268,14 @@ app.get("/me", async (req, res) => {
 
     console.log("Looking up current user");
 
-    const result =
-        await registry.execute(
-            "search.execute",
-            {
-                type: "USER",
-                SearchTerm: "Patrick Wann"
-            }
-        );
+   const result = await registry.execute(
+    "user.lookup",
+    {
+        SearchTerm: "Patrick Wann"
+    }
+);
+
+console.log(JSON.stringify(result, null, 2));
 
     res.json(result);
 });
