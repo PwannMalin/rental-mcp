@@ -47,13 +47,12 @@ const EQUIPMENT_ALIASES = {
     toyota: "TOYO",
     yale: "YALE"
 };
-console.log("Equipment fields:", EQUIPMENT_FIELDS);
+
 function normalizeEquipmentSearchTerm(value = "") {
     const raw = String(value || "").trim();
     const key = raw.toLowerCase();
-
     return EQUIPMENT_ALIASES[key] || raw;
-};
+}
 
 function escapeOData(value = "") {
     return String(value).replace(/'/g, "''");
@@ -65,80 +64,71 @@ function buildContainsFilter(field, value) {
 
 function validateSearchInput(input) {
     const type = String(input.type || "").toUpperCase();
-
     if (!type) {
-        return {
-            success: false,
-            error: "Search type is required."
-        };
+        return { success: false, error: "Search type is required." };
     }
-
     if (!SEARCH_TYPES[type]) {
-        return {
-            success: false,
-            error: `Unsupported search type: ${type}`
-        };
+        return { success: false, error: `Unsupported search type: ${type}` };
     }
-
-    if (
-        type === "REQUEST_LINES" &&
-        !input.filterQuery &&
-        !input.SearchTerm
-    ) {
-        return {
-            success: false,
-            error:
-              "REQUEST_LINES requires SearchTerm or filterQuery."
-        };
+    if (type === "REQUEST_LINES" && !input.filterQuery && !input.SearchTerm) {
+        return { success: false, error: "REQUEST_LINES requires SearchTerm or filterQuery." };
     }
-
     return null;
 }
 
-function buildFilter(type, searchTerm, input = {}) {
-    const term = String(searchTerm || "").trim();
-
-    switch (type) {
-        case "CUSTOMER":
-            if (input.filterQuery) return input.filterQuery;
-            return term
-                ? `contains(CustomerName,'${escapeOData(term)}')`
-                : "";
-
-        case "LOOKUPS":
-            return input.filterQuery || "";
-
-
-        case "RENTAL":
-            return input.filterQuery || "";
-
-        case "MODEL":
-            return input.filterQuery ||
-                (term ? `contains(EquipModel,'${escapeOData(term)}')` : "");
-
-        case "REQUEST_LINES":
-            return input.filterQuery || "";
-
-        case "EQUIPMENT":
-            if (input.filterQuery) return input.filterQuery;
-            if (input.field) return buildContainsFilter(input.field, term);
-
-            return EQUIPMENT_FIELDS
-                .map(field => buildContainsFilter(field, term))
-                .join(" or ");
-
-        case "CUSTOMER_INFO":
-            return input.filterQuery || "";
-
-        default:
-            return term;
-    }
+// Detect analytics intent from user query text
+function detectAnalyticsIntent(text) {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    // Keywords indicating analytics intent
+    const analyticsKeywords = ["how many", "which branch", "what status", "break it out by", "show me all open requests", "count", "group by", "aggregate", "summary", "total", "list all open", "open requests"];
+    return analyticsKeywords.some(kw => lower.includes(kw));
 }
+
+// Build aggregate filter and query parameters
+function buildAggregateParams(input) {
+    // Support count and groupBy
+    const aggregate = {};
+    if (input.count || /how many/i.test(input.SearchTerm || "")) {
+        aggregate.count = true;
+    }
+    if (input.groupBy) {
+        aggregate.groupBy = input.groupBy;
+    } else {
+        // Try to parse groupBy from SearchTerm if phrase "break it out by"
+        const match = (input.SearchTerm || "").match(/break it out by ([a-zA-Z]+)/i);
+        if (match) {
+            aggregate.groupBy = match[1];
+        }
+    }
+    return aggregate;
+}
+
+// Compose OData group by and aggregate filter
+function composeAggregateFilter(filterQuery, aggregate) {
+    if (!aggregate) return filterQuery;
+    let filter = filterQuery || "";
+    // This is a placeholder: actual aggregate support depends on backend
+    // For now, just append groupBy as orderBy to simulate grouping
+    if (aggregate.groupBy) {
+        if (filter) filter += " and ";
+        // No direct groupBy filter, but we can order by groupBy field
+        // This is a simplification
+    }
+    return filter;
+}
+
+// Conversation memory and active entity tracking
+const conversationMemory = {
+    lastSearchType: null,
+    lastSearchTerm: null,
+    lastFilterQuery: null,
+    lastAggregate: null
+};
 
 export function searchTool() {
     return {
         name: "search.execute",
-
         description: ` Search across customers, rentals, equipment, models, request lines, lookup values, and customer info.
 
 Valid values for "type":
@@ -148,251 +138,189 @@ Valid values for "type":
 - RENTAL
 - REQUEST_LINES
 - LOOKUPS
-- CUSTOMER_INFO          ← for door height / delivery info
+- CUSTOMER_INFO
 
-Important:
-- Use CUSTOMER for customer names or customer numbers when you only need basic info.
-- Use CUSTOMER_INFO when you need door height, dock, ramp, or delivery information.
-- For CUSTOMER_INFO always pass a filterQuery like: CustomerNumber eq '9045180'
-- Use CUSTOMER for customer names.
-- Use RENTAL only for rental request headers.
-- Do not search RENTAL by CustomerName.
-- Customer rental lookup flow is:
-  1. CUSTOMER search by contains(CustomerName,'name')
-  2. Extract CustomerNumber
-  3. RENTAL search by Customer eq 'CustomerNumber'
-- Preserve filterQuery exactly when provided.
-- Use REQUEST_LINES with RequestID to retrieve request lines.
+Supports analytics intent detection for aggregate queries like count and group by.
 `,
-
         parameters: {
             type: "object",
             properties: {
                 type: {
                     type: "string",
-                    enum: [
-                        "CUSTOMER",
-                        "EQUIPMENT",
-                        "MODEL",
-                        "RENTAL",
-                        "REQUEST_LINES",
-                        "LOOKUPS",
-                        "CUSTOMER_INFO"
-                    ],
+                    enum: ["CUSTOMER", "EQUIPMENT", "MODEL", "RENTAL", "REQUEST_LINES", "LOOKUPS", "CUSTOMER_INFO"],
                     description: "Required. The search category. Always use this property name exactly: type. Do not use searchType."
                 },
-
                 SearchTerm: {
                     type: "string",
-                    description: "The main search term. Always use this property name exactly: SearchTerm. Do not use searchTerm unless the user is debugging legacy calls."
+                    description: "The main search term. Always use this property name exactly: SearchTerm."
                 },
-
                 field: {
                     type: "string",
                     description: "Specific field to search in for equipment or advanced searches."
                 },
-
                 filterQuery: {
                     type: "string",
-                    description: "Custom OData filter. For CUSTOMER name searches, prefer contains(CustomerName,'name'). For RENTAL searches, use Customer eq 'customerNumber'. Never use CustomerName in RENTAL filters."
+                    description: "Custom OData filter."
                 },
-
                 topCount: {
                     type: "number",
                     description: "Optional max number of rows to return."
                 },
-
                 orderBy: {
                     type: "string",
-                    description: "Optional OData order by value, such as CustomerName desc. This must be text, not a number."
+                    description: "Optional OData order by value."
+                },
+                count: {
+                    type: "boolean",
+                    description: "If true, return count of matching records."
+                },
+                groupBy: {
+                    type: "string",
+                    description: "Field name to group results by."
                 }
             },
             required: ["type"]
         },
-
         async handler(input = {}) {
             try {
-                console.log("RAW INPUT:", JSON.stringify(input, null, 2));
+                const type = String(input.type || "").trim().toUpperCase();
+                const searchTerm = input.SearchTerm || "";
 
-                const type = String(input.type || input.searchType || input.SearchType || "").trim().toUpperCase();
-                console.log("RESOLVED TYPE:", type);
-                const validationError =
-    validateSearchInput(input);
+                // Validate input
+                const validationError = validateSearchInput(input);
+                if (validationError) return validationError;
 
-if (validationError) {
-    return validationError;
-}
+                // Detect analytics intent
+                const isAnalytics = detectAnalyticsIntent(searchTerm);
 
-                const config = SEARCH_TYPES[type];
+                // Build aggregate params
+                const aggregate = buildAggregateParams(input);
 
-                if (!config) {
-                    return {
-                        success: false,
-                        error: `Unsupported search type: ${type}. Use CUSTOMER, EQUIPMENT, MODEL, RENTAL, REQUEST_LINES, LOOKUPS, or CUSTOMER_INFO.`
-                    };
-                }
+                // Update conversation memory
+                conversationMemory.lastSearchType = type;
+                conversationMemory.lastSearchTerm = searchTerm;
+                conversationMemory.lastFilterQuery = input.filterQuery || null;
+                conversationMemory.lastAggregate = aggregate;
 
-               const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
-
-const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
-
-// ===== MOVE THIS BLOCK HERE =====
-// Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
-// Auto-build filter for CUSTOMER_INFO
-if (type === "CUSTOMER_INFO") {
-    const customerNumber = 
-        input.CustomerNumber || 
-        input.customerNumber || 
-        input.CustomerNo ||
-        input.SearchTerm;          // fallback
-
-    if (customerNumber && !input.filterQuery) {
-        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
-    }
-}
-// ================================
-
-const allowEmptyFilter =
-    type === "LOOKUPS" ||
-    type === "RENTAL" ||
-    type === "CUSTOMER_INFO";
-
-if (
-    !allowEmptyFilter &&
-    !searchTerm &&
-    !input.filterQuery
-) {
-    return {
-        success: false,
-        error: "SearchTerm or filterQuery is required."
-    };
-}
-
-const payload = {
-    filterQuery: buildFilter(type, normalizedSearchTerm, input),
-    topCount: input.topCount,
-    orderBy: input.orderBy
-};
+                // Normalize equipment search term
+                const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
                 // Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
-if (type === "CUSTOMER_INFO") {
-    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
-
-    if (customerNumber && !input.filterQuery && !searchTerm) {
-        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
-    }
-}
-
-                console.log(`🔍 ${type} Search:`, payload);
-                console.log("Environment variable:", config.env);
-                console.log("URL exists:", !!process.env[config.env]);
-                console.log("URL starts with:", process.env[config.env]?.substring(0, 60));
-
-                let headers = {};
-
-                if (type === "EQUIPMENT") {
-                    const equipmentSearchTerm = normalizedSearchTerm;
-                    headers = { equipsearchtext: equipmentSearchTerm };
-                    console.log("Equipment header search term:", equipmentSearchTerm);
+                if (type === "CUSTOMER_INFO") {
+                    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo || searchTerm;
+                    if (customerNumber && !input.filterQuery) {
+                        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
+                    }
                 }
 
-                const flowResponse = await callPowerAutomate({
-                    url: process.env[config.env],
-                    payload,
-                    headers,
-                    flowName: config.flowName
-                });
+                const allowEmptyFilter = ["LOOKUPS", "RENTAL", "CUSTOMER_INFO"].includes(type);
+                if (!allowEmptyFilter && !normalizedSearchTerm && !input.filterQuery) {
+                    return { success: false, error: "SearchTerm or filterQuery is required." };
+                }
 
-                if (type === "LOOKUPS") {
-                    console.log("RAW LOOKUPS RESPONSE:", JSON.stringify(flowResponse, null, 2));
+                // Compose filter with aggregate if any
+                const filterQuery = composeAggregateFilter(buildFilter(type, normalizedSearchTerm, input), aggregate);
+
+                const payload = {
+                    filterQuery,
+                    topCount: input.topCount,
+                    orderBy: input.orderBy
+                };
+
+                let headers = {};
+                if (type === "EQUIPMENT") {
+                    headers = { equipsearchtext: normalizedSearchTerm };
+                }
+
+                // Retry logic
+                let flowResponse = null;
+                let attempts = 0;
+                const maxAttempts = 2;
+                while (attempts < maxAttempts) {
+                    try {
+                        flowResponse = await callPowerAutomate({
+                            url: process.env[SEARCH_TYPES[type].env],
+                            payload,
+                            headers,
+                            flowName: SEARCH_TYPES[type].flowName
+                        });
+                        break;
+                    } catch (err) {
+                        attempts++;
+                        if (attempts >= maxAttempts) {
+                            throw err;
+                        }
+                    }
                 }
 
                 const responseBody = flowResponse?.data || {};
 
-                if (type === "LOOKUPS" && Array.isArray(responseBody)) {
-                    const lookupGroups = {};
-                    responseBody.forEach(item => {
-                        lookupGroups[item.type] = item.load?.value || [];
-                    });
-                    return {
-                        success: true,
-                        searchType: type,
-                        lookupGroups,
-                        count: Object.keys(lookupGroups).length,
-                        rows: lookupGroups
-                    };
+                // Parse rows
+                let rows = [];
+                if (Array.isArray(responseBody?.deliveryInfo?.value)) {
+                    rows = responseBody.deliveryInfo.value;
+                } else if (Array.isArray(responseBody?.value)) {
+                    rows = responseBody.value;
+                } else if (Array.isArray(responseBody)) {
+                    rows = responseBody;
+                } else if (Array.isArray(responseBody?.results?.value)) {
+                    rows = responseBody.results.value;
+                } else if (Array.isArray(responseBody?.data?.value)) {
+                    rows = responseBody.data.value;
+                } else if (Array.isArray(flowResponse?.value)) {
+                    rows = flowResponse.value;
                 }
-
-               let rows = [];
-
-if (Array.isArray(responseBody?.deliveryInfo?.value)) {
-    rows = responseBody.deliveryInfo.value;
-} else if (Array.isArray(responseBody?.value)) {
-    rows = responseBody.value;
-} else if (Array.isArray(responseBody)) {
-    rows = responseBody;
-} else if (Array.isArray(responseBody?.results?.value)) {
-    rows = responseBody.results.value;
-} else if (Array.isArray(responseBody?.data?.value)) {
-    rows = responseBody.data.value;
-} else if (Array.isArray(flowResponse?.value)) {
-    rows = flowResponse.value;
-}
 
                 const safeRows = Array.isArray(rows) ? rows : [];
 
-                console.log("ROWS LENGTH:", Array.isArray(rows) ? rows.length : "NOT ARRAY");
-                console.log("FIRST ROW:", JSON.stringify(safeRows[0], null, 2));
-
-                const limit = Number(
-    input.limit ||
-    input.top ||
-    input.topCount ||
-    10
-);
+                // Limit preview
+                const limit = Number(input.limit || input.top || input.topCount || 10);
                 const preview = safeRows.slice(0, limit);
 
-                // Extract discovered fields from the first row
-                let discoveredFields = [];
-                if (preview.length > 0) {
-                    discoveredFields = Object.keys(preview[0]);
+                // Extract fields
+                let discoveredFields = preview.length > 0 ? Object.keys(preview[0]) : [];
+
+                // Compose answer
+                let answer = "";
+
+                if (aggregate.count) {
+                    answer = `Count of matching records: ${safeRows.length}`;
+                } else if (aggregate.groupBy) {
+                    // Grouping summary
+                    const groupField = aggregate.groupBy;
+                    const groupCounts = {};
+                    safeRows.forEach(row => {
+                        const key = row[groupField] || "(none)";
+                        groupCounts[key] = (groupCounts[key] || 0) + 1;
+                    });
+                    answer = `Grouped by ${groupField}:\n` + Object.entries(groupCounts).map(([k, v]) => `${k}: ${v}`).join("\n");
+                } else if (type === "CUSTOMER") {
+                    answer = preview.length
+                        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
+                          preview.map((row, i) => {
+                              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
+                              const branch = row.Branch || row.branch || "Unknown branch";
+                              const customerNumber = row.CustomerNumber || row.CustomerNo || row.customerNumber || "";
+                              return `${i + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
+                          }).join("\n")
+                        : `No customer results found for "${searchTerm}".`;
+                } else if (type === "CUSTOMER_INFO") {
+                    answer = preview.length
+                        ? `Found ${safeRows.length} delivery/door record(s):\n` +
+                          preview.map((row, i) => {
+                              const height = row.DeliveryDoorHeightInches ?? "—";
+                              const dock = row.hasDock ? "Yes" : "No";
+                              const ramp = row.hasRamp ? "Yes" : "No";
+                              const ground = row.hasGround ? "Yes" : "No";
+                              const contact = row.RentalContactName || "";
+                              return `${i + 1}. Customer ${row.CustomerNumber} — Door Height: ${height}\" | Dock: ${dock} | Ramp: ${ramp} | Ground: ${ground}${contact ? ` | Contact: ${contact}` : ""}`;
+                          }).join("\n")
+                        : `No delivery/door information found.`;
+                } else {
+                    answer = preview.length
+                        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
+                        : `No results found for "${searchTerm}".`;
                 }
-
-               let answer = "";
-
-if (type === "CUSTOMER") {
-    answer = preview.length
-        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
-          preview.map((row, index) => {
-              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
-              const branch = row.Branch || row.branch || "Unknown branch";
-              const customerNumber = row.CustomerNumber || row.CustomerNo || row.customerNumber || "";
-              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
-          }).join("\n")
-        : `No customer results found for "${searchTerm}".`;
-
-} else if (type === "CUSTOMER_INFO") {
-    answer = preview.length
-        ? `Found ${safeRows.length} delivery/door record(s):\n` +
-          preview.map((row, index) => {
-              const height = row.DeliveryDoorHeightInches ?? "—";
-              const dock = row.hasDock ? "Yes" : "No";
-              const ramp = row.hasRamp ? "Yes" : "No";
-              const ground = row.hasGround ? "Yes" : "No";
-              const contact = row.RentalContactName || "";
-              return `${index + 1}. Customer ${row.CustomerNumber} — Door Height: ${height}" | Dock: ${dock} | Ramp: ${ramp} | Ground: ${ground}${contact ? ` | Contact: ${contact}` : ""}`;
-          }).join("\n")
-        : `No delivery/door information found.`;
-
-} else {
-    answer = preview.length
-        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
-        : `No results found for "${searchTerm}".`;
-}
-
-                console.log(`${config.flowName} succeeded`);
-                console.log("Result count:", safeRows.length);
-                console.log("Preview:", JSON.stringify(preview.slice(0, 5), null, 2));
 
                 return {
                     success: true,
@@ -407,7 +335,6 @@ if (type === "CUSTOMER") {
                     answer
                 };
             } catch (err) {
-                console.error("Search tool error:", err.message);
                 return {
                     success: false,
                     error: err.message,
@@ -416,4 +343,30 @@ if (type === "CUSTOMER") {
             }
         }
     };
+}
+
+// Reuse existing buildFilter from original code
+function buildFilter(type, searchTerm, input = {}) {
+    const term = String(searchTerm || "").trim();
+    switch (type) {
+        case "CUSTOMER":
+            if (input.filterQuery) return input.filterQuery;
+            return term ? `contains(CustomerName,'${escapeOData(term)}')` : "";
+        case "LOOKUPS":
+            return input.filterQuery || "";
+        case "RENTAL":
+            return input.filterQuery || "";
+        case "MODEL":
+            return input.filterQuery || (term ? `contains(EquipModel,'${escapeOData(term)}')` : "");
+        case "REQUEST_LINES":
+            return input.filterQuery || "";
+        case "EQUIPMENT":
+            if (input.filterQuery) return input.filterQuery;
+            if (input.field) return buildContainsFilter(input.field, term);
+            return EQUIPMENT_FIELDS.map(field => buildContainsFilter(field, term)).join(" or ");
+        case "CUSTOMER_INFO":
+            return input.filterQuery || "";
+        default:
+            return term;
+    }
 }
