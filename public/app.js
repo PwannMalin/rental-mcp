@@ -1,3 +1,6 @@
+import { getCurrentAccount } from "./auth.js";
+
+window.getCurrentAccount = getCurrentAccount;
 const chat =
     document.getElementById("chat");
 
