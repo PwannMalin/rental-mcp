@@ -10,6 +10,8 @@ import { CopilotOrchestrator } from "./agent/copilotOrchestrator.js";
 import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
+import { PublicClientApplication } from "@azure/msal-browser";
+
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
@@ -266,27 +268,23 @@ console.log("LOOKUPS TOOL CALLED");
 // Temporary simple version (replace with real auth later)
 app.get("/me", async (req, res) => {
 
-    console.log("Looking up current user");
+    const email = req.query.email;
+
+    if (!email) {
+        return res.status(400).json({
+            error: "email required"
+        });
+    }
 
     const result = await registry.execute(
         "user.lookup",
         {
-            SearchTerm: "Patrick Wann"
+            SearchTerm: email
         }
-    );
-
-    console.log(
-        "USER LOOKUP:",
-        JSON.stringify(result, null, 2)
     );
 
     const user =
         result?.data?.result?.data?.data?.[0];
-
-    console.log(
-        "FOUND USER:",
-        JSON.stringify(user, null, 2)
-    );
 
     if (!user) {
         return res.status(404).json({
@@ -304,6 +302,7 @@ app.get("/me", async (req, res) => {
                 : null
     });
 });
+
 
 app.get("/test/request-lines", async (req, res) => {
 
