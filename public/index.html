@@ -11,11 +11,7 @@
 console.log("MSAL OBJECT:", window.msal);
 
 
-const loginRequest = {
-    scopes: ["User.Read"]
-};
 
-let msalInitialized = false;
 
 </script>
 
@@ -174,6 +170,11 @@ function getMalinAvatar() {
     `;
 }
 
+let msalInitialized = false;
+
+const loginRequest = {
+    scopes: ["User.Read"]
+};
 
 async function getCurrentAccount() {
     if (!msalInitialized) {
@@ -195,6 +196,8 @@ async function getCurrentAccount() {
 }
 
 async function loadCurrentUser() {
+
+    
     try {
         const account = await getCurrentAccount();
 
