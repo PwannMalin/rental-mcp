@@ -161,13 +161,14 @@ app.get("/test/github/list-branches", async (req, res) => {
 
 app.get("/test/customer-search", async (req, res) => {
 
-    const result = await registry.execute(
-        "search.execute",
-        {
-            type: "CUSTOMER",
-            SearchTerm: req.query.customer || "Amazon"
-        }
-    );
+   const result = await registry.execute(
+    "user.lookup",
+    {
+        SearchTerm: "Patrick Wann"
+    }
+);
+
+console.log(JSON.stringify(result, null, 2));
 
     res.json(result);
 
