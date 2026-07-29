@@ -174,15 +174,18 @@ async function getCurrentAccount() {
         msalInitialized = true;
     }
 
-    // Handle redirect if you ever switch to redirect flow
+    // CRITICAL: handle the redirect response when the user comes back
     try {
         const response = await msalInstance.handleRedirectPromise();
-        if (response) return response.account;
+        if (response && response.account) {
+            console.log("Returned from redirect login:", response.account);
+            return response.account;
+        }
     } catch (e) {
         console.warn("Redirect handling error", e);
     }
 
-    // Only return an already-signed-in account
+    // Already signed in?
     return msalInstance.getAllAccounts()[0] || null;
 }
 
@@ -202,6 +205,22 @@ function getMalinAvatar() {
             <img src="/images/MalinLogo.png" alt="Malin" class="h-7 w-auto object-contain">
         </div>
     `;
+}
+
+async function login() {
+    try {
+        if (!msalInitialized) {
+            await msalInstance.initialize();
+            msalInitialized = true;
+        }
+
+        // This will navigate away from the page
+        await msalInstance.loginRedirect(loginRequest);
+
+    } catch (err) {
+        console.error("Login redirect failed:", err);
+        alert("Login failed.");
+    }
 }
 
 function getUserAvatar(photoUrl) {
