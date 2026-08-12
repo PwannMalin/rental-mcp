@@ -173,30 +173,36 @@ async function ensureMsal() {
     }
 }
 
+// In getCurrentAccount() – remove the loginRedirect and use this instead
+
 async function getCurrentAccount() {
     await ensureMsal();
 
-    // Handle redirect response (user coming back from login)
+    // Handle any previous redirect (in case you still have old sessions)
     try {
         const response = await window.msalInstance.handleRedirectPromise();
         if (response?.account) {
-            console.log("Returned from redirect:", response.account);
             return response.account;
         }
     } catch (e) {
         console.warn("Redirect handling error", e);
     }
 
-    // Already signed in?
     const accounts = window.msalInstance.getAllAccounts();
     if (accounts.length > 0) {
         return accounts[0];
     }
 
-    // No account → force login
-    console.log("No account found – redirecting to login");
-    await window.msalInstance.loginRedirect(loginRequest);
-    return null; // page will navigate away
+    // No account → use POPUP (stays in Chrome)
+    console.log("No account found – opening login popup");
+    try {
+        const result = await window.msalInstance.loginPopup(loginRequest);
+        return result.account;
+    } catch (err) {
+        console.error("Popup login failed:", err);
+        // User closed the popup or blocked it
+        return null;
+    }
 }
 
 // ========== Helpers ==========
@@ -219,17 +225,14 @@ function getMalinAvatar() {
 
 async function login() {
     try {
-        if (!msalInitialized) {
-            await msalInstance.initialize();
-            msalInitialized = true;
-        }
-
-        // This will navigate away from the page
-        await msalInstance.loginRedirect(loginRequest);
-
+        await ensureMsal();
+        const result = await window.msalInstance.loginPopup(loginRequest);
+        // After successful login, reload user data
+        await loadCurrentUser();
+        return result.account;
     } catch (err) {
-        console.error("Login redirect failed:", err);
-        alert("Login failed.");
+        console.error("Login popup failed:", err);
+        alert("Login failed or was cancelled.");
     }
 }
 
