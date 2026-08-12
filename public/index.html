@@ -161,9 +161,26 @@ const msalConfig = {
 const loginRequest = {
     scopes: ["User.Read"]
 };
+try {
 console.log("BEFORE MSAL");
-const msalInstance = new msal.PublicClientApplication(msalConfig);
-console.log("AFTER MSAL", window.msalInstance);
+
+window.msalInstance = new msal.PublicClientApplication(msalConfig);
+
+console.log("MSAL CREATED:", window.msalInstance);
+
+await window.msalInstance.initialize();
+
+console.log("MSAL INITIALIZED");
+} catch (err) {
+
+console.error("MSAL FAILED:", err);
+
+}
+
+console.log(
+    "ACCOUNTS:",
+    window.msalInstance.getAllAccounts()
+);
 let msalInitialized = false;
 
 async function getCurrentAccount() {
