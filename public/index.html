@@ -297,7 +297,7 @@ async function getUserPhoto(emailOrId) {
 
 // ========== Chat UI ==========
 function addMessage(text, isUser, userPhotoUrl = null) {
-    const safeText = escapeHtml(text.trim()).replaceAll("\n", "<br>");
+    const safeText = escapeHtml(text.replace(/^\s+/gm, "").trim()).replaceAll("\n", "<br>");
     const div = document.createElement("div");
     div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
 
@@ -312,15 +312,13 @@ function addMessage(text, isUser, userPhotoUrl = null) {
         `;
     } else {
         div.innerHTML = `
-            ${getMalinAvatar()}
-            <div class="max-w-[75%]">
-                <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm whitespace-pre-wrap">
-                    ${safeText}
-                </div>
-            </div>
-        `;
+    ${getMalinAvatar()}
+    <div class="max-w-[75%]">
+        <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm whitespace-pre-line">${safeText}</div>
+    </div>
+`;
     }
-
+console.log("RAW RESPONSE:", JSON.stringify(text));
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
 }
