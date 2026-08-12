@@ -61,7 +61,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "CUSTOMER",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -74,7 +76,9 @@ console.log(
                         type: "EQUIPMENT",
                         SearchTerm: input.searchText || input.searchTerm || input.query || "",
                         field: input.field,
-                        filterQuery: input.filterQuery
+                        filterQuery: input.filterQuery,
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -85,7 +89,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "RENTAL",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -96,7 +102,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "MODEL",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
