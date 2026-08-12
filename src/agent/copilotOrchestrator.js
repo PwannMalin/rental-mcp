@@ -491,11 +491,41 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 normalizedType === "CUSTOMER" &&
                                 rows.length > 1
                             ) {
+                                const totalCount = result?.count || rows.length;
+                                const returnedCount = result?.returned || rows.length;
+
+                                // If the search returned a preview but there are more customers,
+                                // re-fetch with higher topCount to get enough for enrichment
+                                let customersToEnrich = rows;
+                                
+                                if (totalCount > returnedCount && returnedCount < 25) {
+                                    console.log(`Search returned only ${returnedCount} of ${totalCount} customers. Re-fetching with topCount: 25...`);
+                                    
+                                    try {
+                                        const refetchResult = await this.registry.execute(
+                                            "search.execute",
+                                            {
+                                                type: "CUSTOMER",
+                                                filterQuery: args.filterQuery,
+                                                SearchTerm: args.SearchTerm,
+                                                topCount: 25
+                                            },
+                                            context
+                                        );
+                                        
+                                        customersToEnrich = this.getRowsFromToolResult(refetchResult) || rows;
+                                        console.log(`Re-fetch complete: got ${customersToEnrich.length} customers`);
+                                    } catch (err) {
+                                        console.warn("Re-fetch failed, using original results:", err.message);
+                                        customersToEnrich = rows;
+                                    }
+                                }
+
                                 // Limit to first 25 customers for performance (100+ API calls would timeout)
                                 // but check enough to find ones with active requests
-                                const customersToCheck = rows.slice(0, Math.min(rows.length, 25));
+                                const customersToCheck = customersToEnrich.slice(0, Math.min(customersToEnrich.length, 25));
 
-                                console.log(`Checking ${customersToCheck.length} of ${rows.length} customers for active requests...`);
+                                console.log(`Checking ${customersToCheck.length} of ${totalCount} total customers for active requests...`);
 
                                 this.pendingCustomerSelection = {
                                     options: customersToCheck.map(row => ({
@@ -563,7 +593,7 @@ formatRequestLinesAnswer(rows, userText = "") {
                                     
                                     return {
                                         success: true,
-                                        answer: `No customers matching your search have any active rental requests among the ${enrichedOptions.length} checked. (Note: Searched first 25 of ${rows.length} total Amazon customers.)\n\nWould you like to search for something else?`,
+                                        answer: `No customers matching your search have any active rental requests among the ${enrichedOptions.length} checked. (Note: Searched first 25 of ${totalCount} total Amazon customers.)\n\nWould you like to search for something else?`,
                                         awaitingCustomerSelection: false,
                                         options: []
                                     };
@@ -576,7 +606,7 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 return {
                                     success: true,
                                     answer:
-                                        `Found ${customersWithRequests.length} customers (out of ${enrichedOptions.length} total) matching your search with active rental requests:\n\n` +
+                                        `Found ${customersWithRequests.length} customers (out of ${enrichedOptions.length} checked, ${totalCount} total) with active rental requests:\n\n` +
                                         answerLines.join("\n") +
                                         `\n\nPlease reply with the number or Customer # you want to continue with.`,
                                     awaitingCustomerSelection: true,
