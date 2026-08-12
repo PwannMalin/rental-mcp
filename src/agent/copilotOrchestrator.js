@@ -163,7 +163,7 @@ export class CopilotOrchestrator {
         {
             type: "RENTAL",
             filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 10
+            topCount: 50
         },
         context
     );
@@ -181,7 +181,7 @@ export class CopilotOrchestrator {
         this.rememberActiveRequest(result, {
             type: "RENTAL",
             filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 10
+            topCount: 50
         }, context);
 
         this.captureSchema("RENTAL", result);
@@ -261,7 +261,7 @@ async tryResolvePendingRequestAction(userInput, context, ui) {
         {
             type: "REQUEST_LINES",
             filterQuery,
-            topCount: 20
+            topCount: 50
         },
         context
     );
@@ -521,7 +521,7 @@ formatRequestLinesAnswer(rows, userText = "") {
                                             {
                                                 type: "RENTAL",
                                                 filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                                                topCount: 50
+                                                topCount: 100
                                             },
                                             context
                                         );
@@ -541,18 +541,30 @@ formatRequestLinesAnswer(rows, userText = "") {
                                     }
                                 }
 
-                                const answerLines = enrichedOptions.map((c, i) => {
+                                // Filter to only show customers with requests > 0
+                                const customersWithRequests = enrichedOptions.filter(c => c.requestCount > 0);
+
+                                if (customersWithRequests.length === 0) {
+                                    return {
+                                        success: true,
+                                        answer: `No customers matching your search have any active rental requests. All ${enrichedOptions.length} found customers have 0 requests.\n\nWould you like to search for something else or view all customers including those without requests?`,
+                                        awaitingCustomerSelection: false,
+                                        options: []
+                                    };
+                                }
+
+                                const answerLines = customersWithRequests.map((c, i) => {
                                     return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
                                 });
 
                                 return {
                                     success: true,
                                     answer:
-                                        `Found ${enrichedOptions.length} customers matching your search:\n\n` +
+                                        `Found ${customersWithRequests.length} customers (out of ${enrichedOptions.length} total) matching your search with active rental requests:\n\n` +
                                         answerLines.join("\n") +
                                         `\n\nPlease reply with the number or Customer # you want to continue with.`,
                                     awaitingCustomerSelection: true,
-                                    options: enrichedOptions
+                                    options: customersWithRequests
                                 };
                             }
 

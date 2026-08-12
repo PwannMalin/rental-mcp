@@ -164,7 +164,7 @@ console.log(
         filterQuery: customerNumber 
             ? `CustomerNumber eq '${String(customerNumber).trim()}'` 
             : input.filterQuery || "",
-        topCount: input.topCount || 10
+        topCount: input.topCount || 50
     };
 
     // Now call the shared search logic
