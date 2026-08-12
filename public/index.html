@@ -91,7 +91,7 @@
 
         </div>
 
-        <!-- QUICK ACTIONS -->
+        <!-- QUICK ACTIONS 
         <div class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 flex gap-2 flex-wrap">
             <button onclick="quickAction('Check availability for 5000 lb electric forklift')" 
                     class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
@@ -107,7 +107,7 @@
             </button>
         </div>
 
-        <!-- INPUT AREA -->
+        --><!-- INPUT AREA -->
         <div class="bg-zinc-900 border-t border-zinc-700 p-5">
             <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 transition-all">
                 <button onclick="attachFile()" 
@@ -161,8 +161,9 @@ const msalConfig = {
 const loginRequest = {
     scopes: ["User.Read"]
 };
-
+console.log("BEFORE MSAL");
 const msalInstance = new msal.PublicClientApplication(msalConfig);
+console.log("AFTER MSAL", window.msalInstance);
 let msalInitialized = false;
 
 async function getCurrentAccount() {
