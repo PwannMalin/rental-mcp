@@ -18,14 +18,25 @@ await msalInstance.initialize();
 
 export async function getCurrentAccount() {
 
-    let account =
-        msalInstance.getAllAccounts()[0];
+    console.log("ENTERED getCurrentAccount");
+
+    let accounts =
+        window.msalInstance.getAllAccounts();
+
+    console.log("ACCOUNTS FOUND", accounts);
+
+    let account = accounts[0];
 
     if (!account) {
+
+        console.log("ATTEMPTING LOGIN");
+
         const result =
-            await msalInstance.loginPopup(
-                loginRequest
-            );
+            await window.msalInstance.loginPopup({
+                scopes: ["User.Read"]
+            });
+
+        console.log("LOGIN RESULT", result);
 
         account = result.account;
     }
