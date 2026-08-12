@@ -491,7 +491,8 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 normalizedType === "CUSTOMER" &&
                                 rows.length > 1
                             ) {
-                                const customersToCheck = rows.slice(0, 10);
+                                // Check ALL returned customers (not just first 10) to find ones with requests
+                                const customersToCheck = rows;
 
                                 this.pendingCustomerSelection = {
                                     options: customersToCheck.map(row => ({
