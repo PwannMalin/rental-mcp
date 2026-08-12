@@ -491,8 +491,11 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 normalizedType === "CUSTOMER" &&
                                 rows.length > 1
                             ) {
-                                // Check ALL returned customers (not just first 10) to find ones with requests
-                                const customersToCheck = rows;
+                                // Limit to first 25 customers for performance (100+ API calls would timeout)
+                                // but check enough to find ones with active requests
+                                const customersToCheck = rows.slice(0, Math.min(rows.length, 25));
+
+                                console.log(`Checking ${customersToCheck.length} of ${rows.length} customers for active requests...`);
 
                                 this.pendingCustomerSelection = {
                                     options: customersToCheck.map(row => ({
@@ -509,14 +512,17 @@ formatRequestLinesAnswer(rows, userText = "") {
 
                                 console.log(
                                     "PENDING CUSTOMER SELECTION SET:",
-                                    JSON.stringify(this.pendingCustomerSelection, null, 2)
+                                    JSON.stringify(this.pendingCustomerSelection.options.length, null, 2)
                                 );
 
                                 // Enrich with request counts
                                 const enrichedOptions = [];
 
-                                for (const customer of this.pendingCustomerSelection.options) {
+                                for (let i = 0; i < this.pendingCustomerSelection.options.length; i++) {
+                                    const customer = this.pendingCustomerSelection.options[i];
                                     try {
+                                        console.log(`[${i + 1}/${this.pendingCustomerSelection.options.length}] Checking requests for ${customer.CustomerNumber}...`);
+                                        
                                         const rentalResult = await this.registry.execute(
                                             "search.execute",
                                             {
@@ -533,22 +539,31 @@ formatRequestLinesAnswer(rows, userText = "") {
                                             ...customer,
                                             requestCount: rentalRows.length
                                         });
+                                        console.log(`  ✓ ${customer.CustomerNumber} has ${rentalRows.length} requests`);
                                     } catch (err) {
-                                        console.error(`Failed to get request count for ${customer.CustomerNumber}:`, err.message);
+                                        console.error(`✗ Failed to get request count for ${customer.CustomerNumber}:`, err.message);
                                         enrichedOptions.push({
                                             ...customer,
-                                            requestCount: "?"
+                                            requestCount: 0  // Treat errors as 0 requests to skip them
                                         });
                                     }
                                 }
 
+                                console.log(`Enrichment complete: ${enrichedOptions.length} customers checked`);
+
                                 // Filter to only show customers with requests > 0
                                 const customersWithRequests = enrichedOptions.filter(c => c.requestCount > 0);
 
+                                console.log(`Found ${customersWithRequests.length} customers with active requests`);
+
                                 if (customersWithRequests.length === 0) {
+                                    // Clear search state so "ok" doesn't show old results
+                                    this.lastSearchResults = [];
+                                    this.pendingCustomerSelection = null;
+                                    
                                     return {
                                         success: true,
-                                        answer: `No customers matching your search have any active rental requests. All ${enrichedOptions.length} found customers have 0 requests.\n\nWould you like to search for something else or view all customers including those without requests?`,
+                                        answer: `No customers matching your search have any active rental requests among the ${enrichedOptions.length} checked. (Note: Searched first 25 of ${rows.length} total Amazon customers.)\n\nWould you like to search for something else?`,
                                         awaitingCustomerSelection: false,
                                         options: []
                                     };
