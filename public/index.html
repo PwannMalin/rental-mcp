@@ -297,7 +297,7 @@ async function getUserPhoto(emailOrId) {
 
 // ========== Chat UI ==========
 function addMessage(text, isUser, userPhotoUrl = null) {
-    const safeText = escapeHtml(text).replaceAll("\n", "<br>");
+    const safeText = escapeHtml(text.trim()).replaceAll("\n", "<br>");
     const div = document.createElement("div");
     div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
 
