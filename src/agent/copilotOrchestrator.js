@@ -24,7 +24,18 @@ export class CopilotOrchestrator {
     }
 
     getSessionKey(context) {
-        return `${context.userId || 'nouser'}_${context.tenantId || 'notenant'}`;
+        return `${context.userId || "nouser"}_${context.tenantId || "notenant"}`;
+    }
+
+    async saveSessionState(sessionKey) {
+        await this.memory?.set?.(sessionKey, {
+            activeRequest: this.activeRequest,
+            pendingRequestSelection: this.pendingRequestSelection,
+            pendingCustomerSelection: this.pendingCustomerSelection,
+            lastAgentQuestion: this.lastAgentQuestion,
+            lastSearchResults: this.lastSearchResults,
+            lastSearchType: this.lastSearchType
+        });
     }
 
     getRowsFromToolResult(result) {
@@ -52,14 +63,14 @@ export class CopilotOrchestrator {
             };
         }
 
-        const remaining = this.lastSearchResults.slice(1); // skip the first one already shown
+        const remaining = this.lastSearchResults.slice(1);
 
-        const lines = remaining.map((row, i) => {
-            // Format according to the type (EQUIPMENT example)
-            return `${i + 2}. ${row.Model || row.EquipModel || "—"} — Serial: ${row.Serial || row.SerialNumber || "—"} — Branch: ${row.Branch || "—"}`;
-        }).join("\n");
+        const lines = remaining
+            .map((row, i) => {
+                return `${i + 2}. ${row.Model || row.EquipModel || "—"} — Serial: ${row.Serial || row.SerialNumber || "—"} — Branch: ${row.Branch || "—"}`;
+            })
+            .join("\n");
 
-        // Clear the pending question
         this.lastAgentQuestion = null;
 
         return {
@@ -78,9 +89,6 @@ export class CopilotOrchestrator {
         );
     }
 
-    /**
-     * Capture field names from the first row of a successful search
-     */
     captureSchema(type, result) {
         const rows = this.getRowsFromToolResult(result);
         if (!rows.length) return;
@@ -117,7 +125,7 @@ export class CopilotOrchestrator {
             console.log("ACTIVE REQUEST SET:", JSON.stringify(this.activeRequest, null, 2));
         } else {
             this.pendingRequestSelection = {
-                options: rows.map(row => ({
+                options: rows.map((row) => ({
                     RequestID: this.getRequestId(row),
                     Customer: this.getCleanValue(row.Customer || row.CustomerNumber),
                     CustomerNumber: this.getCleanValue(row.CustomerNumber || row.Customer),
@@ -130,231 +138,245 @@ export class CopilotOrchestrator {
         }
     }
 
- async tryResolvePendingCustomerSelection(userInput, context, ui) {
-    if (!this.pendingCustomerSelection?.options?.length) {
-        return null;
-    }
-
-    const value = this.getCleanValue(userInput);
-
-    const match = this.pendingCustomerSelection.options.find((c, index) => {
-        const customerNumber = this.getCleanValue(c.CustomerNumber);
-        const branch = this.getCleanValue(c.Branch).toLowerCase();
-
-        return (
-            customerNumber === value ||
-            branch === value.toLowerCase() ||
-            parseInt(value) === index + 1
-        );
-    });
-
-    if (!match) {
-        console.log("No match found for pending customer selection:", value);
-        return null;
-    }
-
-    // Clear only after successful match
-    this.pendingCustomerSelection = null;
-
-    console.log("Matched customer:", match);
-
-    const result = await this.registry.execute(
-        "search.execute",
-        {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 50
-        },
-        context
-    );
-
-    const rows = this.getRowsFromToolResult(result);
-
-    if (!rows.length) {
-        return {
-            success: true,
-            answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
-        };
-    }
-
-    if (result?.success) {
-        this.rememberActiveRequest(result, {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${match.CustomerNumber}'`,
-            topCount: 50
-        }, context);
-
-        this.captureSchema("RENTAL", result);
-    }
-
-    const requestList = rows.map((row, index) => {
-        const id = this.getRequestId(row);
-        const status = this.getCleanValue(row.RequestStatus || row.Status);
-        const contact = this.getCleanValue(row.ContactName || row.Contact);
-        return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-    }).join("\n");
-
-    return {
-        success: true,
-        answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`
-    };
-}
-
-async tryResolvePendingRequestAction(userInput, context, ui) {
-    if (!this.activeRequest) {
-        return null;
-    }
-
-    const userText = this.getCleanValue(userInput).toLowerCase();
-
-    // Broader set of keywords
-    const showLinesKeywords = [
-        "request lines",
-        "rental request lines",
-        "show me the lines",
-        "show lines",
-        "show request lines",
-        "can i get the rental request lines",
-        "request details",
-        "show the full line",
-        "full line",
-        "more details on the line",
-        "expand the line",
-        "show everything on the line",
-        "full equipment info",
-        "full equipment",
-        "equipment info",
-        "what model",
-        "model",
-        "details",
-        "more details",
-        "full details",
-        "serial",
-        "capacity",
-        "oach",
-        "qty",
-        "quantity"
-    ];
-
-    const isLineNumber = /^\d+$/.test(userText);
-
-    const wantsLines =
-        showLinesKeywords.some(keyword => userText.includes(keyword)) ||
-        isLineNumber;
-
-    if (!wantsLines) {
-        return null;
-    }
-
-    // Re-use already fetched lines
-    if (this.activeRequest.lines && this.activeRequest.lines.length > 0) {
-        return this.formatRequestLinesAnswer(this.activeRequest.lines, userText);
-    }
-
-    // Otherwise fetch them
-    const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
-
-    await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
-
-    const result = await this.registry.execute(
-        "search.execute",
-        {
-            type: "REQUEST_LINES",
-            filterQuery,
-            topCount: 50
-        },
-        context
-    );
-
-    this.captureSchema("REQUEST_LINES", result);
-
-    const rows = this.getRowsFromToolResult(result);
-    this.activeRequest.lines = rows;
-
-    return this.formatRequestLinesAnswer(rows, userText);
-}
-
-formatRequestLinesAnswer(rows, userText = "") {
-    if (!rows || rows.length === 0) {
-        return {
-            success: true,
-            answer: `I found RequestID ${this.activeRequest.RequestID}, but there are no request lines for it.`
-        };
-    }
-
-    const wantsFull =
-        userText.includes("full") ||
-        userText.includes("more details") ||
-        userText.includes("expand") ||
-        userText.includes("everything") ||
-        userText.includes("serial") ||
-        userText.includes("info") ||
-        userText.includes("model") ||
-        userText.includes("capacity") ||
-        userText.includes("oach");
-
-    const lineNumber = parseInt(userText, 10);
-    let linesToShow = rows;
-
-    if (!isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= rows.length) {
-        linesToShow = [rows[lineNumber - 1]];
-    }
-
-    const linesText = linesToShow.map((row, index) => {
-        const displayIndex = linesToShow.length === 1 ? (lineNumber || 1) : index + 1;
-
-        const model = row.EquipModel || row.Model || "—";
-        const qty = row.RequestedQty || row.Quantity || row.Qty || "—";
-        const oach = row.OACH || "—";
-        const capacity = row.Capacity || "—";
-        const series = row.EquipSeries || "";
-        const group = row.EquipGroup || "";
-        const comments = row.comments || row.Comments || "";
-
-        if (wantsFull || linesToShow.length === 1) {
-            return (
-                `${displayIndex}. ${model}\n` +
-                `Group: ${group} | Series: ${series}\n` +
-                `Qty: ${qty} | OACH: ${oach} | Capacity: ${capacity} lbs` +
-                (comments ? `\nNotes: ${comments.trim()}` : "")
-            );
+    async tryResolvePendingCustomerSelection(userInput, context, ui) {
+        if (!this.pendingCustomerSelection?.options?.length) {
+            return null;
         }
 
-        return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach} — Capacity: ${capacity} lbs`;
-    }).join("\n\n");
+        const value = this.getCleanValue(userInput);
 
-    return {
-        success: true,
-        answer: `Found ${rows.length} request line(s) for RequestID ${this.activeRequest.RequestID}:\n\n${linesText}`
-    };
-}
+        const match = this.pendingCustomerSelection.options.find((c, index) => {
+            const customerNumber = this.getCleanValue(c.CustomerNumber);
+            const branch = this.getCleanValue(c.Branch).toLowerCase();
 
-   
+            return (
+                customerNumber === value ||
+                branch === value.toLowerCase() ||
+                parseInt(value) === index + 1
+            );
+        });
+
+        if (!match) {
+            console.log("No match found for pending customer selection:", value);
+            return null;
+        }
+
+        this.pendingCustomerSelection = null;
+        console.log("Matched customer:", match);
+
+        const result = await this.registry.execute(
+            "search.execute",
+            {
+                type: "RENTAL",
+                filterQuery: `Customer eq '${match.CustomerNumber}'`,
+                topCount: 50
+            },
+            context
+        );
+
+        const rows = this.getRowsFromToolResult(result);
+
+        if (!rows.length) {
+            return {
+                success: true,
+                answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`
+            };
+        }
+
+        if (result?.success) {
+            this.rememberActiveRequest(
+                result,
+                {
+                    type: "RENTAL",
+                    filterQuery: `Customer eq '${match.CustomerNumber}'`,
+                    topCount: 50
+                },
+                context
+            );
+            this.captureSchema("RENTAL", result);
+        }
+
+        const requestList = rows
+            .map((row, index) => {
+                const id = this.getRequestId(row);
+                const status = this.getCleanValue(row.RequestStatus || row.Status);
+                const contact = this.getCleanValue(row.ContactName || row.Contact);
+                return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
+            })
+            .join("\n");
+
+        return {
+            success: true,
+            answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`
+        };
+    }
+
+    async tryResolvePendingRequestAction(userInput, context, ui) {
+        if (!this.activeRequest) {
+            return null;
+        }
+
+        const userText = this.getCleanValue(userInput).toLowerCase();
+
+        const showLinesKeywords = [
+            "request lines",
+            "rental request lines",
+            "show me the lines",
+            "show lines",
+            "show request lines",
+            "can i get the rental request lines",
+            "request details",
+            "show the full line",
+            "full line",
+            "more details on the line",
+            "expand the line",
+            "show everything on the line",
+            "full equipment info",
+            "full equipment",
+            "equipment info",
+            "what model",
+            "model",
+            "details",
+            "more details",
+            "full details",
+            "serial",
+            "capacity",
+            "oach",
+            "qty",
+            "quantity"
+        ];
+
+        const isLineNumber = /^\d+$/.test(userText);
+        const wantsLines =
+            showLinesKeywords.some((keyword) => userText.includes(keyword)) ||
+            isLineNumber;
+
+        if (!wantsLines) {
+            return null;
+        }
+
+        if (this.activeRequest.lines && this.activeRequest.lines.length > 0) {
+            return this.formatRequestLinesAnswer(this.activeRequest.lines, userText);
+        }
+
+        const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
+        await ui.update(`Fetching request lines for RequestID ${this.activeRequest.RequestID}...`);
+
+        const result = await this.registry.execute(
+            "search.execute",
+            {
+                type: "REQUEST_LINES",
+                filterQuery,
+                topCount: 50
+            },
+            context
+        );
+
+        this.captureSchema("REQUEST_LINES", result);
+
+        const rows = this.getRowsFromToolResult(result);
+        this.activeRequest.lines = rows;
+
+        return this.formatRequestLinesAnswer(rows, userText);
+    }
+
+    formatRequestLinesAnswer(rows, userText = "") {
+        if (!rows || rows.length === 0) {
+            return {
+                success: true,
+                answer: `I found RequestID ${this.activeRequest.RequestID}, but there are no request lines for it.`
+            };
+        }
+
+        const wantsFull =
+            userText.includes("full") ||
+            userText.includes("more details") ||
+            userText.includes("expand") ||
+            userText.includes("everything") ||
+            userText.includes("serial") ||
+            userText.includes("info") ||
+            userText.includes("model") ||
+            userText.includes("capacity") ||
+            userText.includes("oach");
+
+        const lineNumber = parseInt(userText, 10);
+        let linesToShow = rows;
+
+        if (!isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= rows.length) {
+            linesToShow = [rows[lineNumber - 1]];
+        }
+
+        const linesText = linesToShow
+            .map((row, index) => {
+                const displayIndex =
+                    linesToShow.length === 1 ? lineNumber || 1 : index + 1;
+
+                const model = row.EquipModel || row.Model || "—";
+                const qty = row.RequestedQty || row.Quantity || row.Qty || "—";
+                const oach = row.OACH || "—";
+                const capacity = row.Capacity || "—";
+                const series = row.EquipSeries || "";
+                const group = row.EquipGroup || "";
+                const comments = row.comments || row.Comments || "";
+
+                if (wantsFull || linesToShow.length === 1) {
+                    return (
+                        `${displayIndex}. ${model}\n` +
+                        `Group: ${group} | Series: ${series}\n` +
+                        `Qty: ${qty} | OACH: ${oach} | Capacity: ${capacity} lbs` +
+                        (comments ? `\nNotes: ${comments.trim()}` : "")
+                    );
+                }
+
+                return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach} — Capacity: ${capacity} lbs`;
+            })
+            .join("\n\n");
+
+        return {
+            success: true,
+            answer: `Found ${rows.length} request line(s) for RequestID ${this.activeRequest.RequestID}:\n\n${linesText}`
+        };
+    }
 
     async runStreaming(userInput, context = {}, ui) {
-        // Load conversation state from memory
         const sessionKey = this.getSessionKey(context);
         const savedState = this.memory?.get?.(sessionKey) || {};
 
         this.activeRequest = savedState.activeRequest || this.activeRequest;
-        this.pendingRequestSelection = savedState.pendingRequestSelection || this.pendingRequestSelection;
-        this.pendingCustomerSelection = savedState.pendingCustomerSelection || this.pendingCustomerSelection;
+        this.pendingRequestSelection =
+            savedState.pendingRequestSelection || this.pendingRequestSelection;
+        this.pendingCustomerSelection =
+            savedState.pendingCustomerSelection || this.pendingCustomerSelection;
         this.lastAgentQuestion = savedState.lastAgentQuestion || this.lastAgentQuestion;
         this.lastSearchResults = savedState.lastSearchResults || this.lastSearchResults;
         this.lastSearchType = savedState.lastSearchType || this.lastSearchType;
 
-        // 1. Resolve pending customer selection
-        const affirmative = ["yes", "yeah", "yep", "sure", "ok", "okay", "please", "the other ones", "show the rest", "more"];
+        const affirmative = [
+            "yes",
+            "yeah",
+            "yep",
+            "sure",
+            "ok",
+            "okay",
+            "please",
+            "the other ones",
+            "show the rest",
+            "more"
+        ];
         const userText = this.getCleanValue(userInput).toLowerCase();
 
         if (affirmative.includes(userText) && this.lastSearchResults?.length > 1) {
-            // User is answering the previous "would you like the others?" question
             return this.showRemainingResults();
         }
 
-        // Clear active request if the user is starting a completely new search
-        const clearKeywords = ["new search", "search equipment", "search for", "find equipment", "lookup equipment"];
-        if (clearKeywords.some(k => userInput.toLowerCase().includes(k))) {
+        const clearKeywords = [
+            "new search",
+            "search equipment",
+            "search for",
+            "find equipment",
+            "lookup equipment"
+        ];
+        if (clearKeywords.some((k) => userInput.toLowerCase().includes(k))) {
             this.activeRequest = null;
             this.pendingCustomerSelection = null;
         }
@@ -368,7 +390,6 @@ formatRequestLinesAnswer(rows, userText = "") {
             return selectionResult;
         }
 
-        // 2. Resolve pending request actions
         const requestActionResult = await this.tryResolvePendingRequestAction(
             userInput,
             context,
@@ -402,7 +423,7 @@ formatRequestLinesAnswer(rows, userText = "") {
                 console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
                 console.log("==================================");
 
-                // Final answer
+                // Final answer (no tool calls)
                 if (msg.content && !msg.tool_calls?.length) {
                     await ui.update("Finalizing response...");
                     let answer = msg.content;
@@ -411,19 +432,12 @@ formatRequestLinesAnswer(rows, userText = "") {
                         answer.toLowerCase().includes("unable to search") ||
                         answer.toLowerCase().includes("no customer")
                     ) {
-                        answer = "I couldn't find matching customer data at the moment. " + answer;
+                        answer =
+                            "I couldn't find matching customer data at the moment. " +
+                            answer;
                     }
 
-                    // Save conversation state before returning
-                    await this.memory?.set?.(sessionKey, {
-                        activeRequest: this.activeRequest,
-                        pendingRequestSelection: this.pendingRequestSelection,
-                        pendingCustomerSelection: this.pendingCustomerSelection,
-                        lastAgentQuestion: this.lastAgentQuestion,
-                        lastSearchResults: this.lastSearchResults,
-                        lastSearchType: this.lastSearchType
-                    });
-
+                    await this.saveSessionState(sessionKey);
                     return { success: true, answer };
                 }
 
@@ -446,10 +460,12 @@ formatRequestLinesAnswer(rows, userText = "") {
                         if (toolName === "search.execute") {
                             args.type = String(
                                 args.type ||
-                                args.searchType ||
-                                args.SearchType ||
-                                ""
-                            ).trim().toUpperCase();
+                                    args.searchType ||
+                                    args.SearchType ||
+                                    ""
+                            )
+                                .trim()
+                                .toUpperCase();
 
                             args.SearchTerm =
                                 args.SearchTerm ||
@@ -466,20 +482,27 @@ formatRequestLinesAnswer(rows, userText = "") {
                             console.log("Calling tool:", toolName);
                             console.log("Arguments:", args);
 
-                            result = await this.registry.execute(toolName, args, context);
+                            result = await this.registry.execute(
+                                toolName,
+                                args,
+                                context
+                            );
 
-                            // Capture schema
                             if (result?.success) {
                                 const type = String(args?.type || "").toUpperCase();
-                                if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+                                if (
+                                    type &&
+                                    this.discoveredSchemas.hasOwnProperty(type)
+                                ) {
                                     this.captureSchema(type, result);
                                 }
                             }
 
-                            const normalizedType = String(args?.type || "").toUpperCase();
+                            const normalizedType = String(
+                                args?.type || ""
+                            ).toUpperCase();
                             const rows = this.getRowsFromToolResult(result);
 
-                            // Save last search results and type if this is a search.execute
                             if (toolName === "search.execute" && result?.success) {
                                 this.lastSearchResults = rows;
                                 this.lastSearchType = normalizedType;
@@ -492,121 +515,179 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 rows.length > 1
                             ) {
                                 const totalCount = result?.count || rows.length;
-                                const returnedCount = result?.returned || rows.length;
+                                const returnedCount =
+                                    result?.returned || rows.length;
 
-                                // If the search returned a preview but there are more customers,
-                                // re-fetch with higher topCount to get enough for enrichment
                                 let customersToEnrich = rows;
-                                
-                                if (totalCount > returnedCount && returnedCount < 25) {
-                                    console.log(`Search returned only ${returnedCount} of ${totalCount} customers. Re-fetching with topCount: 25...`);
-                                    
+
+                                if (
+                                    totalCount > returnedCount &&
+                                    returnedCount < 25
+                                ) {
+                                    console.log(
+                                        `Search returned only ${returnedCount} of ${totalCount} customers. Re-fetching with topCount: 25...`
+                                    );
+
                                     try {
-                                        const refetchResult = await this.registry.execute(
-                                            "search.execute",
-                                            {
-                                                type: "CUSTOMER",
-                                                filterQuery: args.filterQuery,
-                                                SearchTerm: args.SearchTerm,
-                                                topCount: 25
-                                            },
-                                            context
+                                        const refetchResult =
+                                            await this.registry.execute(
+                                                "search.execute",
+                                                {
+                                                    type: "CUSTOMER",
+                                                    filterQuery: args.filterQuery,
+                                                    SearchTerm: args.SearchTerm,
+                                                    topCount: 25
+                                                },
+                                                context
+                                            );
+
+                                        customersToEnrich =
+                                            this.getRowsFromToolResult(
+                                                refetchResult
+                                            ) || rows;
+                                        console.log(
+                                            `Re-fetch complete: got ${customersToEnrich.length} customers`
                                         );
-                                        
-                                        customersToEnrich = this.getRowsFromToolResult(refetchResult) || rows;
-                                        console.log(`Re-fetch complete: got ${customersToEnrich.length} customers`);
                                     } catch (err) {
-                                        console.warn("Re-fetch failed, using original results:", err.message);
+                                        console.warn(
+                                            "Re-fetch failed, using original results:",
+                                            err.message
+                                        );
                                         customersToEnrich = rows;
                                     }
                                 }
 
-                                // Limit to first 25 customers for performance (100+ API calls would timeout)
-                                // but check enough to find ones with active requests
-                                const customersToCheck = customersToEnrich.slice(0, Math.min(customersToEnrich.length, 25));
-
-                                console.log(`Checking ${customersToCheck.length} of ${totalCount} total customers for active requests...`);
-
-                                this.pendingCustomerSelection = {
-                                    options: customersToCheck.map(row => ({
-                                        CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
-                                        Branch: this.getCleanValue(row.Branch || row.branch),
-                                        customerName: this.getCleanValue(
-                                            row.CustomerName ||
-                                            row.customerName ||
-                                            row.Name ||
-                                            row.name
-                                        )
-                                    }))
-                                };
-
-                                console.log(
-                                    "PENDING CUSTOMER SELECTION SET:",
-                                    JSON.stringify(this.pendingCustomerSelection.options.length, null, 2)
+                                const customersToCheck = customersToEnrich.slice(
+                                    0,
+                                    Math.min(customersToEnrich.length, 25)
                                 );
 
-                                // Enrich with request counts
+                                console.log(
+                                    `Checking ${customersToCheck.length} of ${totalCount} total customers for active requests...`
+                                );
+
                                 const enrichedOptions = [];
 
-                                for (let i = 0; i < this.pendingCustomerSelection.options.length; i++) {
-                                    const customer = this.pendingCustomerSelection.options[i];
+                                for (let i = 0; i < customersToCheck.length; i++) {
+                                    const row = customersToCheck[i];
+                                    const customer = {
+                                        CustomerNumber: this.getCleanValue(
+                                            row.CustomerNumber || row.customerNumber
+                                        ),
+                                        Branch: this.getCleanValue(
+                                            row.Branch || row.branch
+                                        ),
+                                        customerName: this.getCleanValue(
+                                            row.CustomerName ||
+                                                row.customerName ||
+                                                row.Name ||
+                                                row.name
+                                        )
+                                    };
+
                                     try {
-                                        console.log(`[${i + 1}/${this.pendingCustomerSelection.options.length}] Checking requests for ${customer.CustomerNumber}...`);
-                                        
-                                        const rentalResult = await this.registry.execute(
-                                            "search.execute",
-                                            {
-                                                type: "RENTAL",
-                                                filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                                                topCount: 100
-                                            },
-                                            context
+                                        console.log(
+                                            `[${i + 1}/${customersToCheck.length}] Checking requests for ${customer.CustomerNumber}...`
                                         );
 
-                                        const rentalRows = this.getRowsFromToolResult(rentalResult);
+                                        const rentalResult =
+                                            await this.registry.execute(
+                                                "search.execute",
+                                                {
+                                                    type: "RENTAL",
+                                                    filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+                                                    topCount: 100
+                                                },
+                                                context
+                                            );
+
+                                        const rentalRows =
+                                            this.getRowsFromToolResult(
+                                                rentalResult
+                                            );
 
                                         enrichedOptions.push({
                                             ...customer,
                                             requestCount: rentalRows.length
                                         });
-                                        console.log(`  ✓ ${customer.CustomerNumber} has ${rentalRows.length} requests`);
+                                        console.log(
+                                            `  ✓ ${customer.CustomerNumber} has ${rentalRows.length} requests`
+                                        );
                                     } catch (err) {
-                                        console.error(`✗ Failed to get request count for ${customer.CustomerNumber}:`, err.message);
+                                        console.error(
+                                            `✗ Failed to get request count for ${customer.CustomerNumber}:`,
+                                            err.message
+                                        );
                                         enrichedOptions.push({
                                             ...customer,
-                                            requestCount: 0  // Treat errors as 0 requests to skip them
+                                            requestCount: 0
                                         });
                                     }
                                 }
 
-                                console.log(`Enrichment complete: ${enrichedOptions.length} customers checked`);
+                                console.log(
+                                    `Enrichment complete: ${enrichedOptions.length} customers checked`
+                                );
 
-                                // Filter to only show customers with requests > 0
-                                const customersWithRequests = enrichedOptions.filter(c => c.requestCount > 0);
+                                const customersWithRequests =
+                                    enrichedOptions.filter(
+                                        (c) => c.requestCount > 0
+                                    );
 
-                                console.log(`Found ${customersWithRequests.length} customers with active requests`);
+                                console.log(
+                                    `Found ${customersWithRequests.length} customers with active requests`
+                                );
 
+                                const checkedCount = enrichedOptions.length;
+                                const total = totalCount || checkedCount;
+
+                                // ---------- NO RESULTS ----------
                                 if (customersWithRequests.length === 0) {
-                                    // Clear search state so "ok" doesn't show old results
                                     this.lastSearchResults = [];
                                     this.pendingCustomerSelection = null;
-                                    
+
+                                    let note = "";
+                                    if (total > checkedCount) {
+                                        note = ` (Note: Checked the first ${checkedCount} of ${total} matching customers.)`;
+                                    } else {
+                                        note = ` (Checked all ${checkedCount} matching customers.)`;
+                                    }
+
+                                    await this.saveSessionState(sessionKey);
+
                                     return {
                                         success: true,
-                                        answer: `No customers matching your search have any active rental requests among the ${enrichedOptions.length} checked. (Note: Searched first 25 of ${totalCount} total Amazon customers.)\n\nWould you like to search for something else?`,
+                                        answer: `No customers matching your search have any active rental requests among the ${checkedCount} checked.${note}\n\nWould you like to search for something else?`,
                                         awaitingCustomerSelection: false,
                                         options: []
                                     };
                                 }
 
-                                const answerLines = customersWithRequests.map((c, i) => {
-                                    return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
-                                });
+                                // ---------- HAS RESULTS ----------
+                                this.pendingCustomerSelection = {
+                                    options: customersWithRequests
+                                };
+
+                                const answerLines = customersWithRequests.map(
+                                    (c, i) => {
+                                        return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
+                                    }
+                                );
+
+                                let summary = `Found ${customersWithRequests.length} customer(s) with active rental requests`;
+
+                                if (total > checkedCount) {
+                                    summary += ` (checked first ${checkedCount} of ${total} matching customers)`;
+                                } else {
+                                    summary += ` (checked all ${checkedCount} matching customers)`;
+                                }
+
+                                await this.saveSessionState(sessionKey);
 
                                 return {
                                     success: true,
                                     answer:
-                                        `Found ${customersWithRequests.length} customers (out of ${enrichedOptions.length} checked, ${totalCount} total) with active rental requests:\n\n` +
+                                        `${summary}:\n\n` +
                                         answerLines.join("\n") +
                                         `\n\nPlease reply with the number or Customer # you want to continue with.`,
                                     awaitingCustomerSelection: true,
@@ -621,7 +702,11 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 normalizedType === "RENTAL";
 
                             if (looksLikeRentalResult && result.success) {
-                                this.rememberActiveRequest(result, args, context);
+                                this.rememberActiveRequest(
+                                    result,
+                                    args,
+                                    context
+                                );
                             }
 
                             console.log(
@@ -630,14 +715,21 @@ formatRequestLinesAnswer(rows, userText = "") {
                             );
 
                             // Handle older tools that return requiresSelection
-                            if (result?.requiresSelection && result?.options?.length) {
+                            if (
+                                result?.requiresSelection &&
+                                result?.options?.length
+                            ) {
                                 this.pendingCustomerSelection = {
-                                    options: result.options.map(c => ({
-                                        CustomerNumber: c.customerNumber || c.CustomerNumber,
+                                    options: result.options.map((c) => ({
+                                        CustomerNumber:
+                                            c.customerNumber || c.CustomerNumber,
                                         Branch: c.branch || c.Branch,
-                                        customerName: c.customerName || c.CustomerName
+                                        customerName:
+                                            c.customerName || c.CustomerName
                                     }))
                                 };
+
+                                await this.saveSessionState(sessionKey);
 
                                 return {
                                     success: true,
@@ -654,9 +746,15 @@ formatRequestLinesAnswer(rows, userText = "") {
                                 };
                             }
 
-                            console.log("TOOL RESULT:", JSON.stringify(result, null, 2));
+                            console.log(
+                                "TOOL RESULT:",
+                                JSON.stringify(result, null, 2)
+                            );
                         } catch (toolErr) {
-                            console.error(`Tool ${toolName} failed:`, toolErr.message);
+                            console.error(
+                                `Tool ${toolName} failed:`,
+                                toolErr.message
+                            );
                             result = {
                                 success: false,
                                 error: toolErr.message,
@@ -691,9 +789,11 @@ formatRequestLinesAnswer(rows, userText = "") {
     buildTools() {
         const tools = this.registry?.tools || {};
         const toolList =
-            tools instanceof Map ? Array.from(tools.values()) : Object.values(tools);
+            tools instanceof Map
+                ? Array.from(tools.values())
+                : Object.values(tools);
 
-        const builtTools = toolList.map(t => ({
+        const builtTools = toolList.map((t) => ({
             type: "function",
             function: {
                 name: t.name,
@@ -710,27 +810,27 @@ formatRequestLinesAnswer(rows, userText = "") {
 
         console.log(
             "TOOLS EXPOSED TO GPT:",
-            builtTools.map(t => t.function.name)
+            builtTools.map((t) => t.function.name)
         );
 
         return builtTools;
     }
 
-  buildSystemPrompt(userId, tenantId) {
-    const memory = this.memory?.get?.(userId, tenantId) || {
-        customers: [],
-        rentals: [],
-        lastActions: [],
-        context: {}
-    };
+    buildSystemPrompt(userId, tenantId) {
+        const memory = this.memory?.get?.(userId, tenantId) || {
+            customers: [],
+            rentals: [],
+            lastActions: [],
+            context: {}
+        };
 
-    const lastDomain = memory.context?.lastSearchDomain || "none";
-    const lastParams = memory.context?.lastSearchParams || {};
+        const lastDomain = memory.context?.lastSearchDomain || "none";
+        const lastParams = memory.context?.lastSearchParams || {};
 
-    return [
-        {
-            role: "system",
-            content: `
+        return [
+            {
+                role: "system",
+                content: `
 You are a helpful internal Rental Assistant.
 
 ### Critical Tool Rules
@@ -762,7 +862,8 @@ Recent actions: ${JSON.stringify(memory.lastActions.slice(0, 4))}
 - When no results are found, say what you searched and suggest a next step.
 - Avoid repeating the exact same search.
 - Ask clarifying questions when the request is ambiguous.
-            `.trim()
-        }
-    ];
-}}
+                `.trim()
+            }
+        ];
+    }
+}
