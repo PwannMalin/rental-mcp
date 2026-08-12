@@ -314,13 +314,13 @@ formatRequestLinesAnswer(rows, userText = "") {
         if (wantsFull || linesToShow.length === 1) {
             return (
                 `${displayIndex}. ${model}\n` +
-                `   Group: ${group} | Series: ${series}\n` +
-                `   Qty: ${qty} | OACH: ${oach}" | Capacity: ${capacity} lbs\n` +
-                (comments ? `   Notes: ${comments.trim()}` : "")
+                `Group: ${group} | Series: ${series}\n` +
+                `Qty: ${qty} | OACH: ${oach} | Capacity: ${capacity} lbs` +
+                (comments ? `\nNotes: ${comments.trim()}` : "")
             );
         }
 
-        return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach}" — Capacity: ${capacity} lbs`;
+        return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach} — Capacity: ${capacity} lbs`;
     }).join("\n\n");
 
     return {
