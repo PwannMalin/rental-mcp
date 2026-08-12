@@ -161,39 +161,26 @@ const msalConfig = {
 const loginRequest = {
     scopes: ["User.Read"]
 };
-try {
-console.log("BEFORE MSAL");
 
 window.msalInstance = new msal.PublicClientApplication(msalConfig);
 
-console.log("MSAL CREATED:", window.msalInstance);
-
-await window.msalInstance.initialize();
-
-console.log("MSAL INITIALIZED");
-} catch (err) {
-
-console.error("MSAL FAILED:", err);
-
-}
-
-console.log(
-    "ACCOUNTS:",
-    window.msalInstance.getAllAccounts()
-);
 let msalInitialized = false;
 
-async function getCurrentAccount() {
+async function ensureMsal() {
     if (!msalInitialized) {
-        await msalInstance.initialize();
+        await window.msalInstance.initialize();
         msalInitialized = true;
     }
+}
 
-    // CRITICAL: handle the redirect response when the user comes back
+async function getCurrentAccount() {
+    await ensureMsal();
+
+    // Handle redirect response (user coming back from login)
     try {
-        const response = await msalInstance.handleRedirectPromise();
-        if (response && response.account) {
-            console.log("Returned from redirect login:", response.account);
+        const response = await window.msalInstance.handleRedirectPromise();
+        if (response?.account) {
+            console.log("Returned from redirect:", response.account);
             return response.account;
         }
     } catch (e) {
@@ -201,7 +188,15 @@ async function getCurrentAccount() {
     }
 
     // Already signed in?
-    return msalInstance.getAllAccounts()[0] || null;
+    const accounts = window.msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+        return accounts[0];
+    }
+
+    // No account → force login
+    console.log("No account found – redirecting to login");
+    await window.msalInstance.loginRedirect(loginRequest);
+    return null; // page will navigate away
 }
 
 // ========== Helpers ==========
@@ -260,28 +255,34 @@ function getUserAvatar(photoUrl) {
 async function loadCurrentUser() {
     try {
         const account = await getCurrentAccount();
-
         if (!account) {
-            console.log("No signed-in account yet");
+            // Either still loading or we just redirected
             currentUser = { id: null, email: null, name: "User", photoUrl: null };
             return;
         }
 
         console.log("MSAL account:", account);
 
-        const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
-        if (!response.ok) throw new Error("Failed to load /me");
-
-        const user = await response.json();
-        console.log("ME RESPONSE:", user);
+        // Try your backend first
+        let user = null;
+        try {
+            const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
+            if (response.ok) {
+                user = await response.json();
+                console.log("ME RESPONSE:", user);
+            }
+        } catch (e) {
+            console.warn("/me failed, falling back to MSAL data", e);
+        }
 
         currentUser = {
-            id: user.id || null,
-            email: user.email || account.username,
-            name: user.name || account.name || "User",
-            photoUrl: user.photoUrl || null
+            id: user?.id || null,
+            email: user?.email || account.username,
+            name: user?.name || account.name || account.username?.split("@")[0] || "User",
+            photoUrl: user?.photoUrl || null
         };
 
+        // Fallback photo from Graph if needed
         if (!currentUser.photoUrl && currentUser.email) {
             currentUser.photoUrl = await getUserPhoto(currentUser.email);
         }
