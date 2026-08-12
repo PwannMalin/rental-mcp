@@ -152,6 +152,19 @@ Valid values for "type":
 
 Important:
 - Use CUSTOMER for customer names or customer numbers when you only need basic info.
+- Use returnAll: true or say "all customers", "every customer", or "list all customers" to retrieve every matching customer.
+- CUSTOMER searches default to 100 rows unless returnAll is true.
+- Example normal customer search payload:
+  {
+    "type": "CUSTOMER",
+    "SearchTerm": "Acme"
+  }
+- Example all-customer search payload:
+  {
+    "type": "CUSTOMER",
+    "SearchTerm": "all customers",
+    "returnAll": true
+  }
 - Use CUSTOMER_INFO when you need door height, dock, ramp, or delivery information.
 - For CUSTOMER_INFO always pass a filterQuery like: CustomerNumber eq '9045180'
 - Use CUSTOMER for customer names.
@@ -164,6 +177,7 @@ Important:
 - Preserve filterQuery exactly when provided.
 - Use REQUEST_LINES with RequestID to retrieve request lines.
 `,
+
 
         parameters: {
             type: "object",
@@ -199,7 +213,12 @@ Important:
 
                 topCount: {
                     type: "number",
-                    description: "Optional max number of rows to return."
+                    description: "Optional max number of rows to return. If omitted for CUSTOMER searches, the default is 100."
+                },
+
+                returnAll: {
+                    type: "boolean",
+                    description: "When true for CUSTOMER searches, fetch all pages of Dataverse/List Rows results using nextLink/skipToken and return all matching customers."
                 },
 
                 orderBy: {
@@ -236,26 +255,25 @@ if (validationError) {
 
 const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
-// ===== MOVE THIS BLOCK HERE =====
-// Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
-// Auto-build filter for CUSTOMER_INFO
-if (type === "CUSTOMER_INFO") {
-    const customerNumber = 
-        input.CustomerNumber || 
-        input.customerNumber || 
-        input.CustomerNo ||
-        input.SearchTerm;          // fallback
+const allSearchMatch = String(searchTerm || "")
+    .trim()
+    .toLowerCase()
+    .match(/^\s*(all|every|list all|show all|all customers|every customer)\b(?:\s+(.*))?$/);
 
-    if (customerNumber && !input.filterQuery) {
-        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
-    }
-}
-// ================================
+const wantsAllCustomers =
+    type === "CUSTOMER" &&
+    Boolean(allSearchMatch);
+
+const effectiveSearchTerm =
+    type === "CUSTOMER" && wantsAllCustomers
+        ? (allSearchMatch?.[2] || "")
+        : normalizedSearchTerm;
 
 const allowEmptyFilter =
     type === "LOOKUPS" ||
     type === "RENTAL" ||
-    type === "CUSTOMER_INFO";
+    type === "CUSTOMER_INFO" ||
+    (type === "CUSTOMER" && wantsAllCustomers);
 
 if (
     !allowEmptyFilter &&
@@ -269,8 +287,12 @@ if (
 }
 
 const payload = {
-    filterQuery: buildFilter(type, normalizedSearchTerm, input),
-    topCount: input.topCount,
+    filterQuery: buildFilter(type, effectiveSearchTerm, input),
+    topCount:
+        type === "CUSTOMER"
+            ? Number(input.topCount || input.limit || (wantsAllCustomers ? 2000 : 100))
+            : input.topCount,
+    returnAll: type === "CUSTOMER" ? (input.returnAll || wantsAllCustomers) : false,
     orderBy: input.orderBy
 };
 
