@@ -19,6 +19,11 @@ export async function callPowerAutomate({
         console.log(JSON.stringify(headers, null, 2));
 console.log("FINAL REQUEST HEADERS:");
 console.log(JSON.stringify(headers, null, 2));
+
+console.log("[powerAutomateClient] METHOD: GET");
+console.log("[powerAutomateClient] flowName:", flowName);
+console.log("[powerAutomateClient] has url:", !!url);
+console.log("[powerAutomateClient] params:", JSON.stringify(payload, null, 2));
        const response = await axios.get(
     url,
     {

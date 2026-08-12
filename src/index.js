@@ -10,9 +10,11 @@ import { CopilotOrchestrator } from "./agent/copilotOrchestrator.js";
 import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
+import { PublicClientApplication } from "@azure/msal-browser";
+
 
 console.log("🔥 ENTRY FILE LOADED");
-
+console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
 // ======================
 // ENV
 // ======================
@@ -173,6 +175,50 @@ app.get("/test/customer-search", async (req, res) => {
 
 });
 
+app.get("/api/user-photo", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).json({ error: "email required" });
+    }
+
+    // Your full Power Automate URL (with sig)
+    const baseUrl =
+    process.env.PA_SEARCH_USER_URL;
+// Use SearchTerm instead of email
+    const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
+
+    console.log("Calling:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Power Automate error:", response.status, text);
+      return res.status(response.status).json({ 
+        error: "Power Automate request failed", 
+        status: response.status,
+        body: text 
+      });
+    }
+
+    const data = await response.json();
+    res.json(data);
+
+  } catch (err) {
+    console.error("Proxy error:", err);
+    res.status(500).json({ 
+      error: "Failed to fetch user", 
+      message: err.message 
+    });
+  }
+});
+
 app.get("/test/search/all-equipment", async (req, res) => {
     const tool = toolSource["search_equipment"];
 
@@ -218,6 +264,41 @@ console.log("LOOKUPS TOOL CALLED");
     res.json(result);
 
 });
+
+// Temporary simple version (replace with real auth later)
+app.get("/me", async (req, res) => {
+    const email = req.query.email;
+    if (!email) {
+        return res.status(400).json({ error: "email required" });
+    }
+
+    const result = await registry.execute(
+        "user.lookup",
+        {
+            SearchTerm: email
+        }
+    );
+
+    const user =
+        result?.data?.result?.data?.data?.[0];
+
+    if (!user) {
+        return res.status(404).json({
+            error: "User not found"
+        });
+    }
+
+    res.json({
+        id: user.Id,
+        email: user.Mail,
+        name: user.DisplayName,
+        photoUrl:
+            user.image?.["$content"]
+                ? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+                : null
+    });
+});
+
 
 app.get("/test/request-lines", async (req, res) => {
 

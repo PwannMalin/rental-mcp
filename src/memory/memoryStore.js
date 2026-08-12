@@ -22,6 +22,12 @@ export class MemoryStore {
         return this.userMemory.get(key);
     }
 
+    setContext(userId, tenantId, contextUpdate) {
+    return this.update(userId, tenantId, (m) => {
+        m.context = { ...m.context, ...contextUpdate };
+    });
+}
+
     update(userId, tenantId, updateFn) {
         const memory = this.get(userId, tenantId);
         updateFn(memory);

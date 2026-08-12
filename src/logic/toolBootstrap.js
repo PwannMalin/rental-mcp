@@ -61,7 +61,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "CUSTOMER",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -74,7 +76,9 @@ console.log(
                         type: "EQUIPMENT",
                         SearchTerm: input.searchText || input.searchTerm || input.query || "",
                         field: input.field,
-                        filterQuery: input.filterQuery
+                        filterQuery: input.filterQuery,
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -85,7 +89,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "RENTAL",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -96,7 +102,9 @@ console.log(
                 async handler(input = {}) {
                     return await search.handler({
                         type: "MODEL",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
+                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
+                        topCount: input.topCount,
+                        returnAll: input.returnAll
                     });
                 }
             },
@@ -115,27 +123,53 @@ console.log(
     }
 },
             {
-                name: "search_request_lines",
-                description: "Find current rental request lines.",
-                tags: ["request", "lines"],
-                async handler(input = {}) {
-                    return await search.handler({
-                        type: "REQUEST_LINES",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || ""
-                    });
-                }
-            },
+    name: "search_request_lines",
+    description: "Find current rental request lines.",
+    tags: ["request", "lines"],
+    async handler(input = {}) {
+
+        const requestId =
+            input.RequestID ||
+            input.requestId ||
+            input.requestID;
+
+        return await search.handler({
+            type: "REQUEST_LINES",
+
+            SearchTerm:
+                input.searchText ||
+                input.searchTerm ||
+                input.query ||
+                "",
+
+            filterQuery:
+                input.filterQuery ||
+                (
+                    requestId
+                    ? `RequestID eq ${Number(requestId)}`
+                    : undefined
+                )
+        });
+    }
+},
             {
                 name: "search_customer_delivery_info",
                 description: "Search customer delivery and door information.",
                 tags: ["customer", "delivery"],
                 async handler(input = {}) {
-                    return await search.handler({
-                        type: "CUSTOMER_INFO",
-                        SearchTerm: input.searchText || input.searchTerm || input.query || "",
-                        filterQuerydoor: input.filterQuerydoor || ""
-                    });
-                }
+    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+
+    const mappedInput = {
+        type: "CUSTOMER_INFO",
+        filterQuery: customerNumber 
+            ? `CustomerNumber eq '${String(customerNumber).trim()}'` 
+            : input.filterQuery || "",
+        topCount: input.topCount || 10
+    };
+
+    // Now call the shared search logic
+    return await searchTool().handler(mappedInput);
+}
             }
         ];
 

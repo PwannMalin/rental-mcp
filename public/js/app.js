@@ -1,3 +1,6 @@
+import { getCurrentAccount } from "./auth.js";
+
+window.getCurrentAccount = getCurrentAccount;
 const chat =
     document.getElementById("chat");
 
@@ -18,6 +21,7 @@ async function sendMessage() {
 
     const text =
         input.value;
+// Example – call your existing search/get user endpoint
 
     if (!text) return;
 

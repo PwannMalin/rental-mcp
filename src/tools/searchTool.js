@@ -63,6 +63,38 @@ function buildContainsFilter(field, value) {
     return `contains(${field},'${escapeOData(value)}')`;
 }
 
+function validateSearchInput(input) {
+    const type = String(input.type || "").toUpperCase();
+
+    if (!type) {
+        return {
+            success: false,
+            error: "Search type is required."
+        };
+    }
+
+    if (!SEARCH_TYPES[type]) {
+        return {
+            success: false,
+            error: `Unsupported search type: ${type}`
+        };
+    }
+
+    if (
+        type === "REQUEST_LINES" &&
+        !input.filterQuery &&
+        !input.SearchTerm
+    ) {
+        return {
+            success: false,
+            error:
+              "REQUEST_LINES requires SearchTerm or filterQuery."
+        };
+    }
+
+    return null;
+}
+
 function buildFilter(type, searchTerm, input = {}) {
     const term = String(searchTerm || "").trim();
 
@@ -75,6 +107,7 @@ function buildFilter(type, searchTerm, input = {}) {
 
         case "LOOKUPS":
             return input.filterQuery || "";
+
 
         case "RENTAL":
             return input.filterQuery || "";
@@ -108,7 +141,32 @@ export function searchTool() {
 
         description: ` Search across customers, rentals, equipment, models, request lines, lookup values, and customer info.
 
+Valid values for "type":
+- CUSTOMER
+- EQUIPMENT
+- MODEL
+- RENTAL
+- REQUEST_LINES
+- LOOKUPS
+- CUSTOMER_INFO          ← for door height / delivery info
+
 Important:
+- Use CUSTOMER for customer names or customer numbers when you only need basic info.
+- Use returnAll: true or say "all customers", "every customer", or "list all customers" to retrieve every matching customer.
+- CUSTOMER searches default to 100 rows unless returnAll is true.
+- Example normal customer search payload:
+  {
+    "type": "CUSTOMER",
+    "SearchTerm": "Acme"
+  }
+- Example all-customer search payload:
+  {
+    "type": "CUSTOMER",
+    "SearchTerm": "all customers",
+    "returnAll": true
+  }
+- Use CUSTOMER_INFO when you need door height, dock, ramp, or delivery information.
+- For CUSTOMER_INFO always pass a filterQuery like: CustomerNumber eq '9045180'
 - Use CUSTOMER for customer names.
 - Use RENTAL only for rental request headers.
 - Do not search RENTAL by CustomerName.
@@ -119,6 +177,7 @@ Important:
 - Preserve filterQuery exactly when provided.
 - Use REQUEST_LINES with RequestID to retrieve request lines.
 `,
+
 
         parameters: {
             type: "object",
@@ -154,7 +213,12 @@ Important:
 
                 topCount: {
                     type: "number",
-                    description: "Optional max number of rows to return."
+                    description: "Optional max number of rows to return. If omitted for CUSTOMER searches, the default is 100."
+                },
+
+                returnAll: {
+                    type: "boolean",
+                    description: "When true for CUSTOMER searches, fetch all pages of Dataverse/List Rows results using nextLink/skipToken and return all matching customers."
                 },
 
                 orderBy: {
@@ -171,6 +235,12 @@ Important:
 
                 const type = String(input.type || input.searchType || input.SearchType || "").trim().toUpperCase();
                 console.log("RESOLVED TYPE:", type);
+                const validationError =
+    validateSearchInput(input);
+
+if (validationError) {
+    return validationError;
+}
 
                 const config = SEARCH_TYPES[type];
 
@@ -181,13 +251,29 @@ Important:
                     };
                 }
 
-                const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
+               const searchTerm = input.SearchTerm || input.searchTerm || input.searchText || input.SearchText || input.query || "";
 
-                const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
+const normalizedSearchTerm = type === "EQUIPMENT" ? normalizeEquipmentSearchTerm(searchTerm) : searchTerm;
 
-                const allowEmptyFilter =
+const allSearchMatch = String(searchTerm || "")
+    .trim()
+    .toLowerCase()
+    .match(/^\s*(all|every|list all|show all|all customers|every customer)\b(?:\s+(.*))?$/);
+
+const wantsAllCustomers =
+    type === "CUSTOMER" &&
+    Boolean(allSearchMatch);
+
+const effectiveSearchTerm =
+    type === "CUSTOMER" && wantsAllCustomers
+        ? (allSearchMatch?.[2] || "")
+        : normalizedSearchTerm;
+
+const allowEmptyFilter =
     type === "LOOKUPS" ||
-    type === "RENTAL";
+    type === "RENTAL" ||
+    type === "CUSTOMER_INFO" ||
+    (type === "CUSTOMER" && wantsAllCustomers);
 
 if (
     !allowEmptyFilter &&
@@ -200,15 +286,24 @@ if (
     };
 }
 
-                const payload = {
-                    filterQuery: buildFilter(type, normalizedSearchTerm, input),
-                    topCount: input.topCount,
-                    orderBy: input.orderBy
-                };
+const payload = {
+    filterQuery: buildFilter(type, effectiveSearchTerm, input),
+    topCount:
+        type === "CUSTOMER"
+            ? Number(input.topCount || input.limit || (wantsAllCustomers ? 2000 : 100))
+            : input.topCount,
+    returnAll: type === "CUSTOMER" ? (input.returnAll || wantsAllCustomers) : false,
+    orderBy: input.orderBy
+};
 
-                if (type === "CUSTOMER_INFO") {
-                    payload.filterQuerydoor = input.filterQuerydoor || "";
-                }
+                // Auto-build filter for CUSTOMER_INFO when only CustomerNumber is given
+if (type === "CUSTOMER_INFO") {
+    const customerNumber = input.CustomerNumber || input.customerNumber || input.CustomerNo;
+
+    if (customerNumber && !input.filterQuery && !searchTerm) {
+        input.filterQuery = `CustomerNumber eq '${String(customerNumber).trim()}'`;
+    }
+}
 
                 console.log(`🔍 ${type} Search:`, payload);
                 console.log("Environment variable:", config.env);
@@ -250,19 +345,21 @@ if (
                     };
                 }
 
-                let rows = [];
+               let rows = [];
 
-                if (Array.isArray(responseBody)) {
-                    rows = responseBody;
-                } else if (Array.isArray(responseBody?.value)) {
-                    rows = responseBody.value;
-                } else if (Array.isArray(responseBody?.results?.value)) {
-                    rows = responseBody.results.value;
-                } else if (Array.isArray(responseBody?.data?.value)) {
-                    rows = responseBody.data.value;
-                } else if (Array.isArray(flowResponse?.value)) {
-                    rows = flowResponse.value;
-                }
+if (Array.isArray(responseBody?.deliveryInfo?.value)) {
+    rows = responseBody.deliveryInfo.value;
+} else if (Array.isArray(responseBody?.value)) {
+    rows = responseBody.value;
+} else if (Array.isArray(responseBody)) {
+    rows = responseBody;
+} else if (Array.isArray(responseBody?.results?.value)) {
+    rows = responseBody.results.value;
+} else if (Array.isArray(responseBody?.data?.value)) {
+    rows = responseBody.data.value;
+} else if (Array.isArray(flowResponse?.value)) {
+    rows = flowResponse.value;
+}
 
                 const safeRows = Array.isArray(rows) ? rows : [];
 
@@ -283,23 +380,37 @@ if (
                     discoveredFields = Object.keys(preview[0]);
                 }
 
-                let answer = "";
+               let answer = "";
 
-                if (type === "CUSTOMER") {
-                    answer = preview.length
-                        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
-                          preview.map((row, index) => {
-                              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
-                              const branch = row.Branch || row.branch || row.BranchName || row.branchName || "Unknown branch";
-                              const customerNumber = row.CustomerNumber || row.CustomerNo || row.CustomerID || row.CustomerId || row.customerNumber || "";
-                              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
-                          }).join("\n")
-                        : `No customer results found for "${searchTerm}".`;
-                } else {
-                    answer = preview.length
-                        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
-                        : `No results found for "${searchTerm}".`;
-                }
+if (type === "CUSTOMER") {
+    answer = preview.length
+        ? `Found ${safeRows.length} customer result(s). First ${preview.length}:\n` +
+          preview.map((row, index) => {
+              const name = row.CustomerName || row.customerName || row.Name || row.name || "Unknown customer";
+              const branch = row.Branch || row.branch || "Unknown branch";
+              const customerNumber = row.CustomerNumber || row.CustomerNo || row.customerNumber || "";
+              return `${index + 1}. ${name} — Branch: ${branch}${customerNumber ? ` — Customer #: ${customerNumber}` : ""}`;
+          }).join("\n")
+        : `No customer results found for "${searchTerm}".`;
+
+} else if (type === "CUSTOMER_INFO") {
+    answer = preview.length
+        ? `Found ${safeRows.length} delivery/door record(s):\n` +
+          preview.map((row, index) => {
+              const height = row.DeliveryDoorHeightInches ?? "—";
+              const dock = row.hasDock ? "Yes" : "No";
+              const ramp = row.hasRamp ? "Yes" : "No";
+              const ground = row.hasGround ? "Yes" : "No";
+              const contact = row.RentalContactName || "";
+              return `${index + 1}. Customer ${row.CustomerNumber} — Door Height: ${height}" | Dock: ${dock} | Ramp: ${ramp} | Ground: ${ground}${contact ? ` | Contact: ${contact}` : ""}`;
+          }).join("\n")
+        : `No delivery/door information found.`;
+
+} else {
+    answer = preview.length
+        ? `Found ${safeRows.length} result(s). Returning first ${preview.length}.`
+        : `No results found for "${searchTerm}".`;
+}
 
                 console.log(`${config.flowName} succeeded`);
                 console.log("Result count:", safeRows.length);

@@ -4,11 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Malin Internal Rental MCP</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.26.1/lib/msal-browser.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <link rel="icon" type="image/png" href="/images/malincubelogo2.png">
+<link rel="shortcut icon" href="/images/malincubelogo2.png">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+
+    
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
         body {
             font-family: 'Inter', system-ui, sans-serif;
         }
@@ -41,8 +50,8 @@
         <!-- HEADER -->
         <div class="bg-zinc-950 border-b border-zinc-700 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex items-center justify-center text-white font-bold text-2xl">
-                    M
+                <div class="h-9 flex items-center justify-center bg-white rounded-xl px-2">
+                    <img src="/images/MalinLogo.png" alt="Malin" class="h-7 w-auto object-contain">
                 </div>
                 <div>
                     <h1 class="text-xl font-semibold">Malin Internal Rental MCP</h1>
@@ -59,16 +68,18 @@
                         class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-zinc-800 transition-colors text-sm">
                     <i class="fas fa-trash"></i>
                 </button>
+                
             </div>
         </div>
 
         <!-- CHAT AREA -->
         <div id="chat" class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin">
             
+            <!-- Welcome message -->
             <div class="flex gap-4 message-bubble">
-                <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">
-                    🏗️
-                </div>
+                <div class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0">
+    <img src="/images/malincubelogo2.png" alt="Malin" class="h-7 w-auto object-contain">
+</div>
                 <div class="max-w-[80%]">
                     <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
                         Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
@@ -122,143 +133,292 @@
         </div>
     </div>
 
-    <script>
-        const chat = document.getElementById('chat');
-        
-        function addMessage(text, isUser) {
-            const div = document.createElement('div');
-            div.className = `flex ${isUser ? 'justify-end' : 'gap-4'} message-bubble`;
-            
-            if (isUser) {
-                div.innerHTML = `
-                    <div class="max-w-[75%]">
-                        <div class="user-bubble rounded-3xl rounded-tr-none px-5 py-3.5 text-sm">
-                            ${text}
-                        </div>
-                    </div>
-                `;
-            } else {
-                div.innerHTML = `
-                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
-                    <div class="max-w-[75%]">
-                        <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm">
-                            ${text}
-                        </div>
-                    </div>
-                `;
-            }
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function showTypingIndicator() {
-            const html = `
-                <div class="flex gap-4" id="typing">
-                    <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
-                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
-                        <div class="flex gap-1">
-                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
-                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-150"></div>
-                            <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-300"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            chat.insertAdjacentHTML('beforeend', html);
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function removeTyping() {
-            const el = document.getElementById('typing');
-            if (el) el.remove();
-        }
-        
-        async function sendMessage() {
+  <script>
+console.log("SCRIPT STARTED");
 
-    const input =
-        document.getElementById("message");
+let currentUser = {
+    id: null,
+    email: null,
+    name: "User",
+    photoUrl: null
+};
 
-    const text =
-        input.value.trim();
+const chat = document.getElementById("chat");
 
-    if (!text) return;
+// ========== MSAL Setup ==========
+const msalConfig = {
+    auth: {
+        clientId: "193e3b30-e9cd-43a8-9a03-a32b1b22cf5f",
+        authority: "https://login.microsoftonline.com/20bd77a5-e148-4b27-bed3-93baf486481b",
+        redirectUri: window.location.origin
+    },
+    cache: {
+        cacheLocation: "sessionStorage",
+        storeAuthStateInCookie: false
+    }
+};
 
-    addMessage(text, true);
+const loginRequest = {
+    scopes: ["User.Read"]
+};
 
-    input.value = "";
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+let msalInitialized = false;
 
-    showTypingIndicator();
+async function getCurrentAccount() {
+    if (!msalInitialized) {
+        await msalInstance.initialize();
+        msalInitialized = true;
+    }
 
+    // CRITICAL: handle the redirect response when the user comes back
     try {
+        const response = await msalInstance.handleRedirectPromise();
+        if (response && response.account) {
+            console.log("Returned from redirect login:", response.account);
+            return response.account;
+        }
+    } catch (e) {
+        console.warn("Redirect handling error", e);
+    }
 
-        const response = await fetch(
-            "/chat",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: text
-                })
-            }
-        );
+    // Already signed in?
+    return msalInstance.getAllAccounts()[0] || null;
+}
 
-        const data =
-            await response.json();
+// ========== Helpers ==========
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
 
-        removeTyping();
+function getMalinAvatar() {
+    return `
+        <div class="w-9 h-9 flex-shrink-0 bg-white rounded-xl flex items-center justify-center">
+            <img src="/images/MalinLogo.png" alt="Malin" class="h-6 w-auto object-contain">
+        </div>
+    `;
+}
 
-        addMessage(
-            data.answer ||
-            "No response received.",
-            false
-        );
+async function login() {
+    try {
+        if (!msalInitialized) {
+            await msalInstance.initialize();
+            msalInitialized = true;
+        }
+
+        // This will navigate away from the page
+        await msalInstance.loginRedirect(loginRequest);
 
     } catch (err) {
+        console.error("Login redirect failed:", err);
+        alert("Login failed.");
+    }
+}
 
+function getUserAvatar(photoUrl) {
+    if (photoUrl) {
+        return `
+            <img src="${photoUrl}"
+                 class="w-9 h-9 rounded-2xl object-cover flex-shrink-0"
+                 alt="User"
+                 onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">
+        `;
+    }
+
+    const initial = escapeHtml(currentUser.name?.charAt(0) || "U");
+    return `
+        <div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">
+            ${initial}
+        </div>
+    `;
+}
+
+// ========== Load current user (dynamic email) ==========
+async function loadCurrentUser() {
+    try {
+        const account = await getCurrentAccount();
+
+        if (!account) {
+            console.log("No signed-in account yet");
+            currentUser = { id: null, email: null, name: "User", photoUrl: null };
+            return;
+        }
+
+        console.log("MSAL account:", account);
+
+        const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
+        if (!response.ok) throw new Error("Failed to load /me");
+
+        const user = await response.json();
+        console.log("ME RESPONSE:", user);
+
+        currentUser = {
+            id: user.id || null,
+            email: user.email || account.username,
+            name: user.name || account.name || "User",
+            photoUrl: user.photoUrl || null
+        };
+
+        if (!currentUser.photoUrl && currentUser.email) {
+            currentUser.photoUrl = await getUserPhoto(currentUser.email);
+        }
+
+        console.log("Current user loaded:", currentUser);
+    } catch (err) {
+        console.warn("Could not load current user", err);
+        currentUser = { id: null, email: null, name: "User", photoUrl: null };
+    }
+}
+
+async function getUserPhoto(emailOrId) {
+    try {
+        const res = await fetch(`/api/user-photo?email=${encodeURIComponent(emailOrId)}`);
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        const user = data.data?.[0] || data;
+
+        if (user?.image?.["$content"]) {
+            const contentType = user.image["$content-type"] || "image/jpeg";
+            return `data:${contentType};base64,${user.image["$content"]}`;
+        }
+
+        return user.photoUrl || user.photo || user.avatar || null;
+    } catch (err) {
+        console.warn("Could not load user photo", err);
+        return null;
+    }
+}
+
+// ========== Chat UI ==========
+function addMessage(text, isUser, userPhotoUrl = null) {
+    const safeText = escapeHtml(text.replace(/^\s+/gm, "").trim()).replaceAll("\n", "<br>");
+    const div = document.createElement("div");
+    div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
+
+    if (isUser) {
+        div.innerHTML = `
+            <div class="flex items-end gap-3 max-w-[80%]">
+                <div class="user-bubble rounded-3xl rounded-tr-none px-5 py-3.5 text-sm">
+                    ${safeText}
+                </div>
+                ${getUserAvatar(userPhotoUrl)}
+            </div>
+        `;
+    } else {
+        div.innerHTML = `
+    ${getMalinAvatar()}
+    <div class="max-w-[75%]">
+        <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm whitespace-pre-line">${safeText}</div>
+    </div>
+`;
+    }
+console.log("RAW RESPONSE:", JSON.stringify(text));
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function showTypingIndicator() {
+    const html = `
+        <div class="flex gap-4" id="typing">
+            ${getMalinAvatar()}
+            <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
+                <div class="flex gap-1">
+                    <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></div>
+                    <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    chat.insertAdjacentHTML("beforeend", html);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function removeTyping() {
+    const el = document.getElementById("typing");
+    if (el) el.remove();
+}
+
+async function sendMessage() {
+    const input = document.getElementById("message");
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, true, currentUser.photoUrl);
+    input.value = "";
+    showTypingIndicator();
+
+    console.log("Sending chat request:", {
+        message: text,
+        userId: currentUser.id,
+        email: currentUser.email,
+        name: currentUser.name
+    });
+
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message: text,
+                userId: currentUser.id,
+                email: currentUser.email,
+                name: currentUser.name
+            })
+        });
+
+        const data = await response.json();
         removeTyping();
 
-        addMessage(
-            `❌ Error: ${err.message}`,
-            false
-        );
+        if (!response.ok) {
+            addMessage(`Error: ${data.error || response.statusText}`, false);
+            return;
+        }
 
+        addMessage(data.answer || "No response received.", false);
+    } catch (err) {
+        removeTyping();
+        addMessage(`Error: ${err.message}`, false);
         console.error(err);
     }
 }
-        
-        function quickAction(text) {
 
-    document.getElementById(
-        "message"
-    ).value = text;
-
+function quickAction(text) {
+    document.getElementById("message").value = text;
     sendMessage();
 }
-        
-        function attachFile() {
-            alert("📎 Attachment uploaded (Internal System)\n\nYou can attach PO, site photos, or spec sheets.");
-        }
-        
-        function clearChat() {
-            if (confirm("Clear this chat session?")) {
-                chat.innerHTML = `
-                    <div class="flex gap-4 message-bubble">
-                        <div class="w-9 h-9 bg-blue-700 rounded-2xl flex-shrink-0 flex items-center justify-center text-xl">🏗️</div>
-                        <div class="max-w-[80%]">
-                            <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
-                                Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
-                                Use me to check rental availability, request quotes, or get equipment recommendations for coordinators and internal teams.
-                            </div>
-                        </div>
+
+function attachFile() {
+    alert("Attachment upload is not wired up yet.");
+}
+
+function clearChat() {
+    if (confirm("Clear this chat session?")) {
+        chat.innerHTML = `
+            <div class="flex gap-4 message-bubble">
+                ${getMalinAvatar()}
+                <div class="max-w-[80%]">
+                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
+                        Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
+                        Use me to check rental availability, request quotes, or get equipment recommendations for coordinators and internal teams.
                     </div>
-                `;
-            }
-        }
-        
-        // Initialize
-        window.onload = () => document.getElementById('message').focus();
-    </script>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// ========== Initialize ==========
+window.onload = async () => {
+    await loadCurrentUser();          // only loads if already signed in
+    document.getElementById("message").focus();
+};
+</script>
 </body>
 </html>
