@@ -168,6 +168,84 @@ export class CopilotOrchestrator {
       this.activeRequest = null;
     }
   }
+ async enrichPageWithRequests(state, context, ui) {
+  const start = state.page * state.pageSize;
+  const pageRows = state.filtered.slice(start, start + state.pageSize);
+
+  await ui.update(
+    `Checking ${pageRows.length} customers on this page for open rental requests…`
+  );
+
+  const enriched = [];
+
+  for (const customer of pageRows) {
+    try {
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+          topCount: 20
+        },
+        context
+      );
+      const count = this.getRowsFromToolResult(rentalResult).length;
+      enriched.push({ ...customer, requestCount: count });
+    } catch {
+      enriched.push({ ...customer, requestCount: 0 });
+    }
+  }
+
+  return enriched;
+}
+
+formatRequestPage(enriched, state) {
+  const withRequests = enriched.filter((c) => c.requestCount > 0);
+  const start = state.page * state.pageSize;
+  const totalPages = Math.ceil(state.filtered.length / state.pageSize);
+
+  let nav = "";
+  if (totalPages > 1) {
+    const parts = [];
+    if (state.page > 0) parts.push(`Prev ${state.pageSize}`);
+    if (state.page < totalPages - 1) parts.push(`Next ${state.pageSize}`);
+    nav = `\n\n[ ${parts.join("  |  ")} ]  (page ${state.page + 1} of ${totalPages})`;
+  }
+
+  const footer =
+    `\n\nYou can:\n` +
+    `• Reply with a **branch** (e.g. Houston)\n` +
+    `• Say **"only with open requests"** to scan more at once\n` +
+    `• Or use **Next / Prev** to check another page`;
+
+  if (withRequests.length === 0) {
+    return {
+      answer:
+        `Checked customers ${start + 1}–${start + enriched.length}.\n` +
+        `None of them have open rental requests.` +
+        nav +
+        footer,
+      withRequests: [],
+      showPagination: totalPages > 1
+    };
+  }
+
+  const lines = withRequests.map((c, i) => {
+    return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
+  });
+
+  return {
+    answer:
+      `Checked customers ${start + 1}–${start + enriched.length}.\n` +
+      `Found ${withRequests.length} with open rental requests:\n\n` +
+      lines.join("\n") +
+      nav +
+      `\n\nReply with the number or Customer # to continue.` +
+      footer,
+    withRequests,
+    showPagination: totalPages > 1
+  };
+}
 
   async tryResolvePendingCustomerSelection(userInput, context, ui) {
     if (!this.pendingCustomerSelection?.options?.length) {
@@ -443,20 +521,38 @@ export class CopilotOrchestrator {
       const text = this.getCleanValue(userInput).toLowerCase();
 
       // Next / Prev
-      if (text.includes("next")) {
-        const maxPage = Math.ceil(state.filtered.length / state.pageSize) - 1;
-        if (state.page < maxPage) {
-          state.page += 1;
-          const { lines, nav } = this.formatCustomerPage(state);
-          await this.saveSessionState(sessionKey);
-          return {
-            success: true,
-            answer: `Page ${state.page + 1}:\n\n${lines}${nav}`,
-            showPagination: true,
-          };
-        }
-        return { success: true, answer: "You’re already on the last page." };
-      }
+     if (text.includes("next")) {
+  const maxPage = Math.ceil(state.filtered.length / state.pageSize) - 1;
+  if (state.page >= maxPage) {
+    return { success: true, answer: "You’re already on the last page." };
+  }
+  state.page += 1;
+
+  if (state.checkRequests) {
+    const enriched = await this.enrichPageWithRequests(state, context, ui);
+    const pageResult = this.formatRequestPage(enriched, state);
+
+    this.pendingCustomerSelection = pageResult.withRequests.length
+      ? { options: pageResult.withRequests }
+      : null;
+
+    await this.saveSessionState(sessionKey);
+    return {
+      success: true,
+      answer: pageResult.answer,
+      showPagination: pageResult.showPagination
+    };
+  }
+
+  // fallback: name-only pagination (existing behavior)
+  const { lines, nav } = this.formatCustomerPage(state);
+  await this.saveSessionState(sessionKey);
+  return {
+    success: true,
+    answer: `Page ${state.page + 1}:\n\n${lines}${nav}`,
+    showPagination: true
+  };
+}
       // Load a larger batch
       if (
         text.includes("load more") ||
@@ -1050,6 +1146,86 @@ if (!isNav && text.length >= 2) {
   onlyWithRequests: false,
   hitLimit,
   currentTopCount: args.topCount || 100,
+};
+
+// ---------- LARGE RESULT SET (> 15) ----------
+const hitLimit = allCustomers.length >= 100;
+const wantsRequests =
+  /request/i.test(userInput) || /rental/i.test(userInput);
+
+this.customerSearchState = {
+  allCustomers,
+  filtered: allCustomers,
+  page: 0,
+  pageSize: 25,
+  searchTerm: args.SearchTerm || "",
+  filterQuery:
+    args.filterQuery ||
+    (args.SearchTerm
+      ? `contains(CustomerName,'${String(args.SearchTerm).replace(/'/g, "''")}')`
+      : ""),
+  onlyWithRequests: false,
+  hitLimit,
+  currentTopCount: args.topCount || 100,
+  checkRequests: wantsRequests, // ← important
+};
+
+this.pendingCustomerSelection = null;
+
+// If user asked for requests, check the first page immediately
+if (wantsRequests) {
+  const enriched = await this.enrichPageWithRequests(
+    this.customerSearchState,
+    context,
+    ui
+  );
+  const pageResult = this.formatRequestPage(
+    enriched,
+    this.customerSearchState
+  );
+
+  if (pageResult.withRequests.length > 0) {
+    this.pendingCustomerSelection = {
+      options: pageResult.withRequests,
+    };
+  }
+
+  await this.saveSessionState(sessionKey);
+
+  return {
+    success: true,
+    answer: pageResult.answer,
+    showPagination: pageResult.showPagination,
+  };
+}
+
+// Name-only list (user did not ask for requests)
+const { lines, nav } = this.formatCustomerPage(this.customerSearchState);
+await this.saveSessionState(sessionKey);
+
+let extraHint = "";
+if (hitLimit) {
+  extraHint =
+    `\n\n⚠️  I only retrieved the first 100 matches. There are likely more.\n` +
+    `• Say **"load more"** (or "show 250") to fetch a larger set\n` +
+    `• Or narrow by branch / name / "only with open requests"`;
+}
+
+return {
+  success: true,
+  answer:
+    `I found ${allCustomers.length} customers matching your search.\n\n` +
+    `Showing first ${Math.min(25, allCustomers.length)}:\n\n` +
+    lines +
+    nav +
+    `\n\nThis is a large result set. You can:\n` +
+    `• Reply with a **branch** name (e.g. "Houston")\n` +
+    `• Give a more specific name (e.g. "Amazon Logistics")\n` +
+    `• Say **"only with open requests"** and I’ll check a larger sample\n` +
+    `• Or use **Next 25** / **Prev 25** to browse` +
+    extraHint,
+  awaitingCustomerSelection: false,
+  showPagination: true,
 };
 
                 this.pendingCustomerSelection = null; // we are not yet in selection mode
