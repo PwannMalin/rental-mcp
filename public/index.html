@@ -1,330 +1,385 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Malin Internal Rental MCP</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.26.1/lib/msal-browser.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-  <link rel="icon" type="image/png" href="/images/malincubelogo2.png">
-<link rel="shortcut icon" href="/images/malincubelogo2.png">
+    <script
+      type="text/javascript"
+      src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.26.1/lib/msal-browser.min.js"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    />
+    <link rel="icon" type="image/png" href="/images/malincubelogo2.png" />
+    <link rel="shortcut icon" href="/images/malincubelogo2.png" />
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-
-    
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    />
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
 
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-        }
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+      }
 
-        .chat-container {
-            background: linear-gradient(180deg, #0f172a 0%, #1e2937 100%);
-        }
+      .chat-container {
+        background: linear-gradient(180deg, #0f172a 0%, #1e2937 100%);
+      }
 
-        .message-bubble {
-            animation: fadeIn 0.3s ease forwards;
-        }
+      .message-bubble {
+        animation: fadeIn 0.3s ease forwards;
+      }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
         }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-        .user-bubble {
-            background: linear-gradient(135deg, #1e40af, #2563eb);
-        }
+      .user-bubble {
+        background: linear-gradient(135deg, #1e40af, #2563eb);
+      }
 
-        .ai-bubble {
-            background: #1f2937;
-        }
+      .ai-bubble {
+        background: #1f2937;
+      }
     </style>
-</head>
-<body class="bg-zinc-950 text-white min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-4xl h-screen flex flex-col bg-zinc-900 shadow-2xl overflow-hidden rounded-3xl border border-zinc-700">
-        
-        <!-- HEADER -->
-        <div class="bg-zinc-950 border-b border-zinc-700 px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div class="h-9 flex items-center justify-center bg-white rounded-xl px-2">
-                    <img src="/images/MalinLogo.png" alt="Malin" class="h-7 w-auto object-contain">
-                </div>
-                <div>
-                    <h1 class="text-xl font-semibold">Malin Internal Rental MCP</h1>
-                    <p class="text-emerald-400 text-xs flex items-center gap-1.5">
-                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                        Live • Connected to Rental Inventory
-                    </p>
-                </div>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                <button onclick="clearChat()" 
-                        aria-label="Clear chat"
-                        class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-zinc-800 transition-colors text-sm">
-                    <i class="fas fa-trash"></i>
-                </button>
-                
-            </div>
+  </head>
+  <body
+    class="bg-zinc-950 text-white min-h-screen flex items-center justify-center p-4"
+  >
+    <div
+      class="w-full max-w-4xl h-screen flex flex-col bg-zinc-900 shadow-2xl overflow-hidden rounded-3xl border border-zinc-700"
+    >
+      <!-- HEADER -->
+      <div
+        class="bg-zinc-950 border-b border-zinc-700 px-6 py-4 flex items-center justify-between"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="h-9 flex items-center justify-center bg-white rounded-xl px-2"
+          >
+            <img
+              src="/images/MalinLogo.png"
+              alt="Malin"
+              class="h-7 w-auto object-contain"
+            />
+          </div>
+          <div>
+            <h1 class="text-xl font-semibold">Malin Internal Rental MCP</h1>
+            <p class="text-emerald-400 text-xs flex items-center gap-1.5">
+              <span
+                class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"
+              ></span>
+              Live • Connected to Rental Inventory
+            </p>
+          </div>
         </div>
 
-        <!-- CHAT AREA -->
-        <div id="chat" class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin">
-            
-            <!-- Welcome message -->
-            <div class="flex gap-4 message-bubble">
-                <div class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0">
-    <img src="/images/malincubelogo2.png" alt="Malin" class="h-7 w-auto object-contain">
-</div>
-                <div class="max-w-[80%]">
-                    <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
-                        Hello! I'm the <strong>Internal Rental MCP</strong>.<br><br>
-                        Use me to check rental availability, request quotes, or get equipment recommendations for coordinators and internal teams.
-                    </div>
-                    <p class="text-xs text-zinc-500 mt-1.5 pl-2">just now</p>
-                </div>
+        <div class="flex items-center gap-3">
+          <button
+            onclick="clearChat()"
+            aria-label="Clear chat"
+            class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-zinc-800 transition-colors text-sm"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- CHAT AREA -->
+      <div
+        id="chat"
+        class="flex-1 overflow-y-auto p-6 space-y-6 chat-container scrollbar-thin"
+      >
+        <!-- Welcome message -->
+        <div class="flex gap-4 message-bubble">
+          <div
+            class="h-9 bg-white rounded-xl px-2 flex items-center justify-center flex-shrink-0"
+          >
+            <img
+              src="/images/malincubelogo2.png"
+              alt="Malin"
+              class="h-7 w-auto object-contain"
+            />
+          </div>
+          <div class="max-w-[80%]">
+            <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
+              Hello! I'm the <strong>Internal Rental MCP</strong>.<br /><br />
+              Use me to check rental availability, request quotes, or get
+              equipment recommendations for coordinators and internal teams.
             </div>
-
+            <p class="text-xs text-zinc-500 mt-1.5 pl-2">just now</p>
+          </div>
         </div>
+      </div>
 
-        <!-- QUICK ACTIONS 
-        <div class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 flex gap-2 flex-wrap">
-            <button onclick="quickAction('Check availability for 5000 lb electric forklift')" 
-                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
-                Check Availability
-            </button>
-            <button onclick="quickAction('Request quote for 30-day rental')" 
-                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
-                Request Quote
-            </button>
-            <button onclick="quickAction('Show current Raymond reach truck inventory')" 
-                    class="text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl transition-colors">
-                Raymond Inventory
-            </button>
+      <!-- QUICK ACTIONS  -->
+      <div
+        class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 flex gap-2 flex-wrap"
+      >
+        <div class="pagination-buttons flex gap-2 mt-2">
+          <button onclick="sendQuick('Prev 25')" class="...">← Prev 25</button>
+          <button onclick="sendQuick('Next 25')" class="...">Next 25 →</button>
         </div>
+      </div>
 
-        --><!-- INPUT AREA -->
-        <div class="bg-zinc-900 border-t border-zinc-700 p-5">
-            <div class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 transition-all">
-                <button onclick="attachFile()" 
-                        aria-label="Attach file"
-                        class="pl-6 pr-4 py-5 text-zinc-400 hover:text-blue-400">
-                    <i class="fas fa-paperclip"></i>
-                </button>
-                
-                <input 
-                    id="message"
-                    type="text"
-                    placeholder="E.g. Need quote for 2x 6000lb electric forklifts for Houston site, 45 days..."
-                    class="flex-1 bg-transparent py-5 px-3 outline-none text-sm placeholder-zinc-500"
-                    onkeypress="if(event.key === 'Enter') sendMessage()"
-                />
-                
-                <button onclick="sendMessage()" 
-                        aria-label="Send"
-                        class="w-11 h-11 bg-blue-600 hover:bg-blue-500 rounded-3xl flex items-center justify-center mr-2 text-white">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
+      <!-- INPUT AREA -->
+      <div class="bg-zinc-900 border-t border-zinc-700 p-5">
+        <div
+          class="flex items-center bg-zinc-800 rounded-3xl border border-zinc-700 focus-within:border-blue-500 transition-all"
+        >
+          <button
+            onclick="attachFile()"
+            aria-label="Attach file"
+            class="pl-6 pr-4 py-5 text-zinc-400 hover:text-blue-400"
+          >
+            <i class="fas fa-paperclip"></i>
+          </button>
+
+          <input
+            id="message"
+            type="text"
+            placeholder="E.g. Need quote for 2x 6000lb electric forklifts for Houston site, 45 days..."
+            class="flex-1 bg-transparent py-5 px-3 outline-none text-sm placeholder-zinc-500"
+            onkeypress="if (event.key === 'Enter') sendMessage();"
+          />
+
+          <button
+            onclick="sendMessage()"
+            aria-label="Send"
+            class="w-11 h-11 bg-blue-600 hover:bg-blue-500 rounded-3xl flex items-center justify-center mr-2 text-white"
+          >
+            <i class="fas fa-paper-plane"></i>
+          </button>
         </div>
+      </div>
     </div>
 
-  <script>
-console.log("SCRIPT STARTED");
+    <script>
+      console.log("SCRIPT STARTED");
 
-let currentUser = {
-    id: null,
-    email: null,
-    name: "User",
-    photoUrl: null
-};
+      let currentUser = {
+        id: null,
+        email: null,
+        name: "User",
+        photoUrl: null,
+      };
 
-const chat = document.getElementById("chat");
+      const chat = document.getElementById("chat");
 
-// ========== MSAL Setup ==========
-const msalConfig = {
-    auth: {
-        clientId: "193e3b30-e9cd-43a8-9a03-a32b1b22cf5f",
-        authority: "https://login.microsoftonline.com/20bd77a5-e148-4b27-bed3-93baf486481b",
-        redirectUri: window.location.origin
-    },
-    cache: {
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false
-    }
-};
+      // ========== MSAL Setup ==========
+      const msalConfig = {
+        auth: {
+          clientId: "193e3b30-e9cd-43a8-9a03-a32b1b22cf5f",
+          authority:
+            "https://login.microsoftonline.com/20bd77a5-e148-4b27-bed3-93baf486481b",
+          redirectUri: window.location.origin,
+        },
+        cache: {
+          cacheLocation: "sessionStorage",
+          storeAuthStateInCookie: false,
+        },
+      };
 
-const loginRequest = {
-    scopes: ["User.Read"]
-};
+      const loginRequest = {
+        scopes: ["User.Read"],
+      };
 
-window.msalInstance = new msal.PublicClientApplication(msalConfig);
+      window.msalInstance = new msal.PublicClientApplication(msalConfig);
 
-let msalInitialized = false;
+      let msalInitialized = false;
 
-async function ensureMsal() {
-    if (!msalInitialized) {
-        await window.msalInstance.initialize();
-        msalInitialized = true;
-    }
-}
-
-// In getCurrentAccount() – remove the loginRedirect and use this instead
-
-async function getCurrentAccount() {
-    await ensureMsal();
-
-    // Handle any previous redirect (in case you still have old sessions)
-    try {
-        const response = await window.msalInstance.handleRedirectPromise();
-        if (response?.account) {
-            return response.account;
+      async function ensureMsal() {
+        if (!msalInitialized) {
+          await window.msalInstance.initialize();
+          msalInitialized = true;
         }
-    } catch (e) {
-        console.warn("Redirect handling error", e);
-    }
+      }
 
-    const accounts = window.msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-        return accounts[0];
-    }
+      // In getCurrentAccount() – remove the loginRedirect and use this instead
 
-    // No account → use POPUP (stays in Chrome)
-    console.log("No account found – opening login popup");
-    try {
-        const result = await window.msalInstance.loginPopup(loginRequest);
-        return result.account;
-    } catch (err) {
-        console.error("Popup login failed:", err);
-        // User closed the popup or blocked it
-        return null;
-    }
-}
+      async function getCurrentAccount() {
+        await ensureMsal();
 
-// ========== Helpers ==========
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
+        // Handle any previous redirect (in case you still have old sessions)
+        try {
+          const response = await window.msalInstance.handleRedirectPromise();
+          if (response?.account) {
+            return response.account;
+          }
+        } catch (e) {
+          console.warn("Redirect handling error", e);
+        }
 
-function getMalinAvatar() {
-    return `
+        const accounts = window.msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          return accounts[0];
+        }
+
+        // No account → use POPUP (stays in Chrome)
+        console.log("No account found – opening login popup");
+        try {
+          const result = await window.msalInstance.loginPopup(loginRequest);
+          return result.account;
+        } catch (err) {
+          console.error("Popup login failed:", err);
+          // User closed the popup or blocked it
+          return null;
+        }
+      }
+
+      // ========== Helpers ==========
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function getMalinAvatar() {
+        return `
         <div class="w-9 h-9 flex-shrink-0 bg-white rounded-xl flex items-center justify-center">
             <img src="/images/malincubelogo2.png" alt="Malin" class="h-6 w-auto object-contain">
         </div>
     `;
+      }
+      function sendQuick(text) {
+  document.getElementById("message").value = text;
+  sendMessage();
 }
 
-async function login() {
-    try {
-        await ensureMsal();
-        const result = await window.msalInstance.loginPopup(loginRequest);
-        // After successful login, reload user data
-        await loadCurrentUser();
-        return result.account;
-    } catch (err) {
-        console.error("Login popup failed:", err);
-        alert("Login failed or was cancelled.");
-    }
-}
+      async function login() {
+        try {
+          await ensureMsal();
+          const result = await window.msalInstance.loginPopup(loginRequest);
+          // After successful login, reload user data
+          await loadCurrentUser();
+          return result.account;
+        } catch (err) {
+          console.error("Login popup failed:", err);
+          alert("Login failed or was cancelled.");
+        }
+      }
 
-function getUserAvatar(photoUrl) {
-    if (photoUrl) {
-        return `
+      function getUserAvatar(photoUrl) {
+        if (photoUrl) {
+          return `
             <img src="${photoUrl}"
                  class="w-9 h-9 rounded-2xl object-cover flex-shrink-0"
                  alt="User"
                  onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0\\'>U</div>'">
         `;
-    }
+        }
 
-    const initial = escapeHtml(currentUser.name?.charAt(0) || "U");
-    return `
+        const initial = escapeHtml(currentUser.name?.charAt(0) || "U");
+        return `
         <div class="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-sm font-medium flex-shrink-0">
             ${initial}
         </div>
     `;
-}
+      }
 
-// ========== Load current user (dynamic email) ==========
-async function loadCurrentUser() {
-    try {
-        const account = await getCurrentAccount();
-        if (!account) {
-            // Either still loading or we just redirected
-            currentUser = { id: null, email: null, name: "User", photoUrl: null };
-            return;
-        }
-
-        console.log("MSAL account:", account);
-
-        // Try your backend first
-        let user = null;
+      // ========== Load current user (dynamic email) ==========
+      async function loadCurrentUser() {
         try {
-            const response = await fetch(`/me?email=${encodeURIComponent(account.username)}`);
-            if (response.ok) {
-                user = await response.json();
-                console.log("ME RESPONSE:", user);
-            }
-        } catch (e) {
-            console.warn("/me failed, falling back to MSAL data", e);
-        }
+          const account = await getCurrentAccount();
+          if (!account) {
+            // Either still loading or we just redirected
+            currentUser = {
+              id: null,
+              email: null,
+              name: "User",
+              photoUrl: null,
+            };
+            return;
+          }
 
-        currentUser = {
+          console.log("MSAL account:", account);
+
+          // Try your backend first
+          let user = null;
+          try {
+            const response = await fetch(
+              `/me?email=${encodeURIComponent(account.username)}`,
+            );
+            if (response.ok) {
+              user = await response.json();
+              console.log("ME RESPONSE:", user);
+            }
+          } catch (e) {
+            console.warn("/me failed, falling back to MSAL data", e);
+          }
+
+          currentUser = {
             id: user?.id || null,
             email: user?.email || account.username,
-            name: user?.name || account.name || account.username?.split("@")[0] || "User",
-            photoUrl: user?.photoUrl || null
-        };
+            name:
+              user?.name ||
+              account.name ||
+              account.username?.split("@")[0] ||
+              "User",
+            photoUrl: user?.photoUrl || null,
+          };
 
-        // Fallback photo from Graph if needed
-        if (!currentUser.photoUrl && currentUser.email) {
+          // Fallback photo from Graph if needed
+          if (!currentUser.photoUrl && currentUser.email) {
             currentUser.photoUrl = await getUserPhoto(currentUser.email);
+          }
+
+          console.log("Current user loaded:", currentUser);
+        } catch (err) {
+          console.warn("Could not load current user", err);
+          currentUser = { id: null, email: null, name: "User", photoUrl: null };
         }
+      }
 
-        console.log("Current user loaded:", currentUser);
-    } catch (err) {
-        console.warn("Could not load current user", err);
-        currentUser = { id: null, email: null, name: "User", photoUrl: null };
-    }
-}
+      async function getUserPhoto(emailOrId) {
+        try {
+          const res = await fetch(
+            `/api/user-photo?email=${encodeURIComponent(emailOrId)}`,
+          );
+          if (!res.ok) return null;
 
-async function getUserPhoto(emailOrId) {
-    try {
-        const res = await fetch(`/api/user-photo?email=${encodeURIComponent(emailOrId)}`);
-        if (!res.ok) return null;
+          const data = await res.json();
+          const user = data.data?.[0] || data;
 
-        const data = await res.json();
-        const user = data.data?.[0] || data;
-
-        if (user?.image?.["$content"]) {
+          if (user?.image?.["$content"]) {
             const contentType = user.image["$content-type"] || "image/jpeg";
             return `data:${contentType};base64,${user.image["$content"]}`;
+          }
+
+          return user.photoUrl || user.photo || user.avatar || null;
+        } catch (err) {
+          console.warn("Could not load user photo", err);
+          return null;
         }
+      }
 
-        return user.photoUrl || user.photo || user.avatar || null;
-    } catch (err) {
-        console.warn("Could not load user photo", err);
-        return null;
-    }
-}
+      // ========== Chat UI ==========
+      function addMessage(text, isUser, userPhotoUrl = null) {
+        const safeText = escapeHtml(
+          text.replace(/^\s+/gm, "").trim(),
+        ).replaceAll("\n", "<br>");
+        const div = document.createElement("div");
+        div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
 
-// ========== Chat UI ==========
-function addMessage(text, isUser, userPhotoUrl = null) {
-    const safeText = escapeHtml(text.replace(/^\s+/gm, "").trim()).replaceAll("\n", "<br>");
-    const div = document.createElement("div");
-    div.className = `flex ${isUser ? "justify-end" : "gap-4"} message-bubble`;
-
-    if (isUser) {
-        div.innerHTML = `
+        if (isUser) {
+          div.innerHTML = `
             <div class="flex items-end gap-3 max-w-[80%]">
                 <div class="user-bubble rounded-3xl rounded-tr-none px-5 py-3.5 text-sm">
                     ${safeText}
@@ -332,21 +387,21 @@ function addMessage(text, isUser, userPhotoUrl = null) {
                 ${getUserAvatar(userPhotoUrl)}
             </div>
         `;
-    } else {
-        div.innerHTML = `
+        } else {
+          div.innerHTML = `
     ${getMalinAvatar()}
     <div class="max-w-[75%]">
         <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-3.5 text-sm whitespace-pre-line">${safeText}</div>
     </div>
 `;
-    }
-console.log("RAW RESPONSE:", JSON.stringify(text));
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-}
+        }
+        console.log("RAW RESPONSE:", JSON.stringify(text));
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
 
-function showTypingIndicator() {
-    const html = `
+      function showTypingIndicator() {
+        const html = `
         <div class="flex gap-4" id="typing">
             ${getMalinAvatar()}
             <div class="ai-bubble rounded-3xl rounded-tl-none px-5 py-4">
@@ -358,71 +413,71 @@ function showTypingIndicator() {
             </div>
         </div>
     `;
-    chat.insertAdjacentHTML("beforeend", html);
-    chat.scrollTop = chat.scrollHeight;
-}
+        chat.insertAdjacentHTML("beforeend", html);
+        chat.scrollTop = chat.scrollHeight;
+      }
 
-function removeTyping() {
-    const el = document.getElementById("typing");
-    if (el) el.remove();
-}
+      function removeTyping() {
+        const el = document.getElementById("typing");
+        if (el) el.remove();
+      }
 
-async function sendMessage() {
-    const input = document.getElementById("message");
-    const text = input.value.trim();
-    if (!text) return;
+      async function sendMessage() {
+        const input = document.getElementById("message");
+        const text = input.value.trim();
+        if (!text) return;
 
-    addMessage(text, true, currentUser.photoUrl);
-    input.value = "";
-    showTypingIndicator();
+        addMessage(text, true, currentUser.photoUrl);
+        input.value = "";
+        showTypingIndicator();
 
-    console.log("Sending chat request:", {
-        message: text,
-        userId: currentUser.id,
-        email: currentUser.email,
-        name: currentUser.name
-    });
+        console.log("Sending chat request:", {
+          message: text,
+          userId: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+        });
 
-    try {
-        const response = await fetch("/chat", {
+        try {
+          const response = await fetch("/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                message: text,
-                userId: currentUser.id,
-                email: currentUser.email,
-                name: currentUser.name
-            })
-        });
+              message: text,
+              userId: currentUser.id,
+              email: currentUser.email,
+              name: currentUser.name,
+            }),
+          });
 
-        const data = await response.json();
-        removeTyping();
+          const data = await response.json();
+          removeTyping();
 
-        if (!response.ok) {
+          if (!response.ok) {
             addMessage(`Error: ${data.error || response.statusText}`, false);
             return;
+          }
+
+          addMessage(data.answer || "No response received.", false);
+        } catch (err) {
+          removeTyping();
+          addMessage(`Error: ${err.message}`, false);
+          console.error(err);
         }
+      }
 
-        addMessage(data.answer || "No response received.", false);
-    } catch (err) {
-        removeTyping();
-        addMessage(`Error: ${err.message}`, false);
-        console.error(err);
-    }
-}
+      function quickAction(text) {
+        document.getElementById("message").value = text;
+        sendMessage();
+      }
 
-function quickAction(text) {
-    document.getElementById("message").value = text;
-    sendMessage();
-}
+      function attachFile() {
+        alert("Attachment upload is not wired up yet.");
+      }
 
-function attachFile() {
-    alert("Attachment upload is not wired up yet.");
-}
-
-function clearChat() {
-    if (confirm("Clear this chat session?")) {
-        chat.innerHTML = `
+      function clearChat() {
+        if (confirm("Clear this chat session?")) {
+          chat.innerHTML = `
             <div class="flex gap-4 message-bubble">
                 ${getMalinAvatar()}
                 <div class="max-w-[80%]">
@@ -433,14 +488,14 @@ function clearChat() {
                 </div>
             </div>
         `;
-    }
-}
+        }
+      }
 
-// ========== Initialize ==========
-window.onload = async () => {
-    await loadCurrentUser();          // only loads if already signed in
-    document.getElementById("message").focus();
-};
-</script>
-</body>
+      // ========== Initialize ==========
+      window.onload = async () => {
+        await loadCurrentUser(); // only loads if already signed in
+        document.getElementById("message").focus();
+      };
+    </script>
+  </body>
 </html>
