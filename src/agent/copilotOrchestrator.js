@@ -841,6 +841,7 @@ export class CopilotOrchestrator {
                           `Found 1 rental request for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n` +
                           `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
                           `You can say "show request lines", "details", or "equipment requested" for more information.`,
+                          showPagination: false
                       };
                     }
 
@@ -864,6 +865,7 @@ export class CopilotOrchestrator {
                         `Found ${rows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
                         requestList +
                         `\n\nYou can say "show request lines" or "details" for more information.`,
+                        showPagination: true
                     };
                   }
 
@@ -882,6 +884,7 @@ export class CopilotOrchestrator {
                       `Found ${withRequests.length} customer(s) with active rental requests:\n\n` +
                       lines.join("\n") +
                       `\n\nPlease reply with the number or Customer # you want to continue with.`,
+                    showPagination: true,
                     awaitingCustomerSelection: true,
                     options: withRequests,
                   };
@@ -962,6 +965,7 @@ export class CopilotOrchestrator {
                       .join("\n"),
                   awaitingCustomerSelection: true,
                   options: result.options,
+                  showPagination: true
                 };
               }
 

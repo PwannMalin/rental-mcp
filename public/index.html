@@ -419,11 +419,6 @@
         console.log("RAW RESPONSE:", JSON.stringify(text));
         chat.appendChild(div);
         chat.scrollTop = chat.scrollHeight;
-        if (data.showPagination) {
-          showPagination(true);
-        } else {
-          showPagination(false);
-        }
       }
 
       function showTypingIndicator() {
@@ -457,6 +452,9 @@
         input.value = "";
         showTypingIndicator();
 
+        // Hide pagination while waiting for the next reply
+        showPagination(false);
+
         console.log("Sending chat request:", {
           message: text,
           userId: currentUser.id,
@@ -481,13 +479,18 @@
 
           if (!response.ok) {
             addMessage(`Error: ${data.error || response.statusText}`, false);
+            showPagination(false);
             return;
           }
 
           addMessage(data.answer || "No response received.", false);
+
+          // Show / hide the pagination bar based on the bot response
+          showPagination(!!data.showPagination);
         } catch (err) {
           removeTyping();
           addMessage(`Error: ${err.message}`, false);
+          showPagination(false);
           console.error(err);
         }
       }
