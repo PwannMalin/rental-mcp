@@ -457,7 +457,82 @@ export class CopilotOrchestrator {
         }
         return { success: true, answer: "You’re already on the last page." };
       }
+      // Load a larger batch
+      if (
+        text.includes("load more") ||
+        text.includes("show more") ||
+        text.match(/show\s+(\d+)/) ||
+        text.includes("fetch more")
+      ) {
+        const match = text.match(/(\d{2,4})/);
+        const newTop = match ? Math.min(Number(match[1]), 500) : 250; // safety cap
 
+        await ui.update(`Fetching up to ${newTop} customers…`);
+
+        const refetch = await this.registry.execute(
+          "search.execute",
+          {
+            type: "CUSTOMER",
+            SearchTerm: state.searchTerm,
+            filterQuery: state.filterQuery,
+            topCount: newTop,
+          },
+          context,
+        );
+
+        const rows = this.getRowsFromToolResult(refetch);
+
+        const allCustomers = rows.map((row) => ({
+          CustomerNumber: this.getCleanValue(
+            row.CustomerNumber || row.customerNumber,
+          ),
+          Branch: this.getCleanValue(row.Branch || row.branch),
+          customerName: this.getCleanValue(
+            row.CustomerName || row.customerName || row.Name || row.name,
+          ),
+          requestCount: null,
+        }));
+
+        state.allCustomers = allCustomers;
+        state.filtered = allCustomers;
+        state.page = 0;
+        state.currentTopCount = newTop;
+        state.hitLimit = allCustomers.length >= newTop;
+
+        const { lines, nav } = this.formatCustomerPage(state);
+        await this.saveSessionState(sessionKey);
+
+        return {
+          success: true,
+          answer:
+            `Loaded ${allCustomers.length} customers` +
+            (state.hitLimit ? " (there may still be more)" : "") +
+            `.\n\n` +
+            lines +
+            nav +
+            `\n\nYou can keep browsing, narrow by branch, or say "only with open requests".`,
+          showPagination: true,
+        };
+      }
+
+      if (allCustomers.length === 100) {
+        // silently ask for more
+        const bigger = await this.registry.execute(
+          "search.execute",
+          {
+            type: "CUSTOMER",
+            SearchTerm: args.SearchTerm,
+            filterQuery: args.filterQuery,
+            topCount: 250,
+          },
+          context,
+        );
+
+        const moreRows = this.getRowsFromToolResult(bigger);
+        if (moreRows.length > allCustomers.length) {
+          allCustomers = moreRows.map(/* same mapping */);
+        }
+      }
       if (text.includes("prev") || text.includes("previous")) {
         if (state.page > 0) {
           state.page -= 1;
@@ -841,7 +916,7 @@ export class CopilotOrchestrator {
                           `Found 1 rental request for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n` +
                           `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
                           `You can say "show request lines", "details", or "equipment requested" for more information.`,
-                          showPagination: false
+                        showPagination: false,
                       };
                     }
 
@@ -865,7 +940,7 @@ export class CopilotOrchestrator {
                         `Found ${rows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
                         requestList +
                         `\n\nYou can say "show request lines" or "details" for more information.`,
-                        showPagination: true
+                      showPagination: true,
                     };
                   }
 
@@ -891,14 +966,18 @@ export class CopilotOrchestrator {
                 }
 
                 // ---------- LARGE RESULT SET (> 15) → store state + ask to narrow ----------
+                const hitLimit = allCustomers.length >= 100;
+
                 this.customerSearchState = {
                   allCustomers,
-                  filtered: allCustomers, // starts unfiltered
+                  filtered: allCustomers,
                   page: 0,
-                  pageSize,
+                  pageSize: 25,
                   searchTerm: args.SearchTerm || "",
                   filterQuery: args.filterQuery || "",
                   onlyWithRequests: false,
+                  hitLimit, // ← new
+                  currentTopCount: args.topCount || 100,
                 };
 
                 this.pendingCustomerSelection = null; // we are not yet in selection mode
@@ -908,6 +987,14 @@ export class CopilotOrchestrator {
                 );
 
                 await this.saveSessionState(sessionKey);
+
+                let extraHint = "";
+                if (hitLimit) {
+                  extraHint =
+                    `\n\n⚠️  I only retrieved the first 100 matches. There are likely more.\n` +
+                    `• Say **"load more"** (or "show 250") to fetch a larger set\n` +
+                    `• Or narrow by branch / name / "only with open requests"`;
+                }
 
                 return {
                   success: true,
@@ -965,7 +1052,7 @@ export class CopilotOrchestrator {
                       .join("\n"),
                   awaitingCustomerSelection: true,
                   options: result.options,
-                  showPagination: true
+                  showPagination: true,
                 };
               }
 
