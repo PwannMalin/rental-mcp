@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import {
   CloudAdapter,
-  ConfigurationBotFrameworkAuthentication
+  ConfigurationBotFrameworkAuthentication,
 } from "botbuilder";
 
 import { createRegistry } from "./logic/toolBootstrap.js";
@@ -12,417 +12,383 @@ import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
 import { PublicClientApplication } from "@azure/msal-browser";
 
-
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
 // ======================
 // ENV
 // ======================
 const REPOSITORY_ID = process.env.REPOSITORY_ID || process.env.REPOSITORYID;
-const RENTAL_FOLDER_ID = Number(process.env.RENTAL_FOLDER_ID || process.env.RENTALFOLDERID || 67);
+const RENTAL_FOLDER_ID = Number(
+  process.env.RENTAL_FOLDER_ID || process.env.RENTALFOLDERID || 67,
+);
 const PORT = process.env.PORT || 8080;
 
 // ======================
 // DEBUG AUTH
 // ======================
 function requireDebug(req, res, next) {
-const expectedKey = process.env.DEBUG_KEY;
+  const expectedKey = process.env.DEBUG_KEY;
 
-if (!expectedKey) {
-return res.status(500).json({
-success: false,
-error: "DEBUG_KEY not configured"
-});
-}
+  if (!expectedKey) {
+    return res.status(500).json({
+      success: false,
+      error: "DEBUG_KEY not configured",
+    });
+  }
 
-const providedKey = req.headers["x-debug-key"];
+  const providedKey = req.headers["x-debug-key"];
 
-if (providedKey !== expectedKey) {
-return res.status(401).json({
-success: false,
-error: "Unauthorized"
-});
-}
+  if (providedKey !== expectedKey) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized",
+    });
+  }
 
-next();
+  next();
 }
 // ======================
 // BOOTSTRAP
 // ======================
 async function bootstrap() {
-    try {
-        console.log("🚀 Starting bootstrap...");
+  try {
+    console.log("🚀 Starting bootstrap...");
 
-        const memory = new MemoryStore();
-        const llm = createAzureOpenAI();
+    const memory = new MemoryStore();
+    const llm = createAzureOpenAI();
 
-        const context = {
-            db: {},
-            azure: {},
-            githubApi: {},
-            ids: { repository: REPOSITORY_ID, rentalFolder: RENTAL_FOLDER_ID },
-            REPOSITORY_ID,
-            RENTAL_FOLDER_ID
-        };
+    const context = {
+      db: {},
+      azure: {},
+      githubApi: {},
+      ids: { repository: REPOSITORY_ID, rentalFolder: RENTAL_FOLDER_ID },
+      REPOSITORY_ID,
+      RENTAL_FOLDER_ID,
+    };
 
-        const {
-    registry,
-    chainEngine
-} = createRegistry(context);
+    const { registry, chainEngine } = createRegistry(context);
 
-console.log("Chain Engine:", !!chainEngine);
+    console.log("Chain Engine:", !!chainEngine);
 
-if (chainEngine) {
-    console.log(
-        "Available Workflows:",
-        chainEngine.listWorkflows()
+    if (chainEngine) {
+      console.log("Available Workflows:", chainEngine.listWorkflows());
+    }
+    const toolSource =
+      registry?.tools instanceof Map
+        ? Object.fromEntries(registry.tools.entries())
+        : registry?.tools || registry || {};
+
+    console.log("🧠 Total tools registered:", Object.keys(toolSource).length);
+
+    const copilot = new CopilotOrchestrator({ registry, llm, memory });
+
+    const app = express();
+
+    app.use(express.static("public"));
+    app.use(
+      express.json({
+        limit: "25mb",
+        verify: (req, res, buf) => {
+          req.rawBody = buf.toString();
+        },
+      }),
     );
-}
-        const toolSource = registry?.tools instanceof Map 
-            ? Object.fromEntries(registry.tools.entries()) 
-            : (registry?.tools || registry || {});
 
-        console.log("🧠 Total tools registered:", Object.keys(toolSource).length);
-
-        const copilot = new CopilotOrchestrator({ registry, llm, memory });
-
-        const app = express();
-
-        app.use(express.static("public"));
-        app.use(express.json({
-            limit: "25mb",
-            verify: (req, res, buf) => { req.rawBody = buf.toString(); }
-        }));
-
-        // Health & Debug
-        app.get("/health", (req, res) =>
-    res.json({
+    // Health & Debug
+    app.get("/health", (req, res) =>
+      res.json({
         status: "healthy",
-        toolCount: Object.keys(toolSource).length
-    })
-);
-        app.get("/debug", (req, res) => {
-            res.json({
-                success: true,
-                AZURE_OPENAI_DEPLOYMENT: process.env.AZURE_OPENAI_DEPLOYMENT,
-                MicrosoftAppId: process.env.MicrosoftAppId ? "SET" : "MISSING"
-            });
-        });
+        toolCount: Object.keys(toolSource).length,
+      }),
+    );
+    app.get("/debug", (req, res) => {
+      res.json({
+        success: true,
+        AZURE_OPENAI_DEPLOYMENT: process.env.AZURE_OPENAI_DEPLOYMENT,
+        MicrosoftAppId: process.env.MicrosoftAppId ? "SET" : "MISSING",
+      });
+    });
 
-        app.get("/tools", (req, res) => {
-    const tools = Object.values(toolSource).map(tool => ({
+    app.get("/tools", (req, res) => {
+      const tools = Object.values(toolSource).map((tool) => ({
         name: tool.name,
         description: tool.description,
-        tags: tool.tags || []
-    }));
+        tags: tool.tags || [],
+      }));
 
-    res.json({
+      res.json({
         success: true,
         count: tools.length,
-        tools
+        tools,
+      });
     });
-});
 
-app.get("/test/github/list-branches", async (req, res) => {
-    try {
+    app.get("/test/github/list-branches", async (req, res) => {
+      try {
         const tool = toolSource["github.listBranches"];
 
         if (!tool) {
-            return res.status(404).json({
-                success: false,
-                error: "github.listBranches tool not found",
-                availableTools: Object.keys(toolSource)
-            });
+          return res.status(404).json({
+            success: false,
+            error: "github.listBranches tool not found",
+            availableTools: Object.keys(toolSource),
+          });
         }
 
         const result = await tool.handler({
-            owner: req.query.owner || "PwannMalin",
-            repo: req.query.repo || "rental-mcp"
+          owner: req.query.owner || "PwannMalin",
+          repo: req.query.repo || "rental-mcp",
         });
 
         res.json({
-            success: true,
-            tool: "github.listBranches",
-            result
+          success: true,
+          tool: "github.listBranches",
+          result,
         });
-    } catch (err) {
+      } catch (err) {
+        console.error("Branch ERROR", err);
 
-    console.error(
-        "Branch ERROR",
-        err
-    );
-
-    res.status(500).json({
-        success: false,
-        error: err.message,
-        stack: err.stack
-    });
-
-}
-});
-
-app.get("/test/customer-search", async (req, res) => {
-
-    const result = await registry.execute(
-        "search.execute",
-        {
-            type: "CUSTOMER",
-            SearchTerm: req.query.customer || "Amazon"
-        }
-    );
-
-    res.json(result);
-
-});
-
-app.get("/api/user-photo", async (req, res) => {
-  try {
-    const email = req.query.email;
-    if (!email) {
-      return res.status(400).json({ error: "email required" });
-    }
-
-    // Your full Power Automate URL (with sig)
-    const baseUrl =
-    process.env.PA_SEARCH_USER_URL;
-// Use SearchTerm instead of email
-    const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
-
-    console.log("Calling:", url);
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
+        res.status(500).json({
+          success: false,
+          error: err.message,
+          stack: err.stack,
+        });
       }
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("Power Automate error:", response.status, text);
-      return res.status(response.status).json({ 
-        error: "Power Automate request failed", 
-        status: response.status,
-        body: text 
+    app.get("/test/customer-search", async (req, res) => {
+      const result = await registry.execute("search.execute", {
+        type: "CUSTOMER",
+        SearchTerm: req.query.customer || "Amazon",
       });
-    }
 
-    const data = await response.json();
-    res.json(data);
-
-  } catch (err) {
-    console.error("Proxy error:", err);
-    res.status(500).json({ 
-      error: "Failed to fetch user", 
-      message: err.message 
-    });
-  }
-});
-
-app.get("/test/search/all-equipment", async (req, res) => {
-    const tool = toolSource["search_equipment"];
-
-    const result = await tool.handler({
-        filterQuery: ""
+      res.json(result);
     });
 
-    res.json(result);
-});
-
-app.get("/test/rental-requests", async (req, res) => {
-  const result = await toolSource["rental_requests"].handler({
-    customerNumber: "9037070",
-    top: 5
-  });
-
-  console.log(JSON.stringify(result, null, 2));
-
-  res.json(result);
-});
-
-
-app.get("/test/search/models", async (req, res) => {
-
-    const tool = toolSource["search_models"];
-
-    const result = await tool.handler({
-        searchText: ""
-    });
-
-    res.json(result);
-
-});
-
-
-
-app.get("/test/rental-lookups", async (req, res) => {
-
-    const tool = toolSource["rental_lookups"];
-console.log("LOOKUPS TOOL CALLED");
-    const result = await tool.handler({});
-
-    res.json(result);
-
-});
-
-// Temporary simple version (replace with real auth later)
-app.get("/me", async (req, res) => {
-    const email = req.query.email;
-    if (!email) {
-        return res.status(400).json({ error: "email required" });
-    }
-
-    const result = await registry.execute(
-        "user.lookup",
-        {
-            SearchTerm: email
+    app.get("/api/user-photo", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) {
+          return res.status(400).json({ error: "email required" });
         }
-    );
 
-    const user =
-        result?.data?.result?.data?.data?.[0];
+        // Your full Power Automate URL (with sig)
+        const baseUrl = process.env.PA_SEARCH_USER_URL;
+        // Use SearchTerm instead of email
+        const url = `${baseUrl}&SearchTerm=${encodeURIComponent(email)}`;
 
-    if (!user) {
-        return res.status(404).json({
-            error: "User not found"
+        console.log("Calling:", url);
+
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
         });
-    }
 
-    res.json({
+        if (!response.ok) {
+          const text = await response.text();
+          console.error("Power Automate error:", response.status, text);
+          return res.status(response.status).json({
+            error: "Power Automate request failed",
+            status: response.status,
+            body: text,
+          });
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (err) {
+        console.error("Proxy error:", err);
+        res.status(500).json({
+          error: "Failed to fetch user",
+          message: err.message,
+        });
+      }
+    });
+
+    app.get("/test/search/all-equipment", async (req, res) => {
+      const tool = toolSource["search_equipment"];
+
+      const result = await tool.handler({
+        filterQuery: "",
+      });
+
+      res.json(result);
+    });
+
+    app.get("/test/rental-requests", async (req, res) => {
+      const result = await toolSource["rental_requests"].handler({
+        customerNumber: "9037070",
+        top: 5,
+      });
+
+      console.log(JSON.stringify(result, null, 2));
+
+      res.json(result);
+    });
+
+    app.get("/test/search/models", async (req, res) => {
+      const tool = toolSource["search_models"];
+
+      const result = await tool.handler({
+        searchText: "",
+      });
+
+      res.json(result);
+    });
+
+    app.get("/test/rental-lookups", async (req, res) => {
+      const tool = toolSource["rental_lookups"];
+      console.log("LOOKUPS TOOL CALLED");
+      const result = await tool.handler({});
+
+      res.json(result);
+    });
+
+    // Temporary simple version (replace with real auth later)
+    app.get("/me", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).json({ error: "email required" });
+      }
+
+      const result = await registry.execute("user.lookup", {
+        SearchTerm: email,
+      });
+
+      const user = result?.data?.result?.data?.data?.[0];
+
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found",
+        });
+      }
+
+      res.json({
         id: user.Id,
         email: user.Mail,
         name: user.DisplayName,
-        photoUrl:
-            user.image?.["$content"]
-                ? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
-                : null
+        photoUrl: user.image?.["$content"]
+          ? `data:${user.image["$content-type"]};base64,${user.image["$content"]}`
+          : null,
+      });
     });
-});
 
+    app.get("/test/request-lines", async (req, res) => {
+      const tool = toolSource["search.execute"];
 
-app.get("/test/request-lines", async (req, res) => {
-
-    const tool = toolSource["search.execute"];
-
-    const result = await tool.handler({
+      const result = await tool.handler({
         type: "REQUEST_LINES",
-        filterQuery: `RequestID eq ${req.query.requestId || 3035}`
+        filterQuery: `RequestID eq ${req.query.requestId || 3035}`,
+      });
+
+      res.json(result);
     });
 
-    res.json(result);
+    app.get("/test/requests-by-customer", async (req, res) => {
+      const tool = toolSource["search.execute"];
 
-});
-
-app.get("/test/requests-by-customer", async (req, res) => {
-
-    const tool = toolSource["search.execute"];
-
-    const result = await tool.handler({
+      const result = await tool.handler({
         type: "RENTAL",
-        filterQuery: `Customer eq '${req.query.customer}'`
+        filterQuery: `Customer eq '${req.query.customer}'`,
+      });
+
+      res.json(result);
     });
 
-    res.json(result);
-
-});
-
-app.post("/chat", async (req, res) => {
-
-    try {
-
+    app.post("/chat", async (req, res) => {
+      try {
         const message = req.body.message;
 
-        const result =
-            await copilot.runStreaming(
-                message,
-                {},
-                {
-                    typing: async () => {},
-                    update: async () => {},
-                    sendFinal: async () => {}
-                }
-            );
+        const result = await copilot.runStreaming(
+          message,
+          {
+            userId: req.body.userId,
+            tenantId: req.body.tenantId,
+          },
+          {
+            typing: async () => {},
+            update: async () => {},
+            sendFinal: async () => {},
+          },
+        );
 
         res.json({
-            success: true,
-            answer: result.answer
+          success: true,
+          answer: result.answer,
+          showPagination: !!result.showPagination, // ← add this
+          awaitingCustomerSelection: !!result.awaitingCustomerSelection,
         });
-
-    } catch (err) {
-
-    console.error(
-        "CHAT ERROR",
-        err
-    );
-
-    res.status(500).json({
-        success: false,
-        error: err.message,
-        stack: err.stack
+      } catch (err) {
+        console.error("CHAT ERROR", err);
+        res.status(500).json({
+          success: false,
+          error: err.message,
+          stack: err.stack,
+        });
+      }
     });
 
-}
+    // MCP endpoint (keep your existing one)
 
-});
+    // ======================
+    // TEAMS BOT
+    // ======================
+    const botFrameworkAuthentication =
+      new ConfigurationBotFrameworkAuthentication(process.env);
+    const adapter = new CloudAdapter(botFrameworkAuthentication);
 
+    adapter.onTurnError = async (context, error) => {
+      console.error("💥 onTurnError:", error);
+      await context.sendActivity("Sorry, something went wrong.");
+    };
 
-        // MCP endpoint (keep your existing one)
+    app.post("/api/messages", async (req, res) => {
+      console.log("📥 Request received at /api/messages");
 
-        // ======================
-        // TEAMS BOT
-        // ======================
-        const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(process.env);
-        const adapter = new CloudAdapter(botFrameworkAuthentication);
+      try {
+        await adapter.process(req, res, async (turnContext) => {
+          if (turnContext.activity.type !== "message") {
+            console.log("Not a message activity");
+            return;
+          }
 
-        adapter.onTurnError = async (context, error) => {
-            console.error("💥 onTurnError:", error);
-            await context.sendActivity("Sorry, something went wrong.");
-        };
+          const text = (turnContext.activity.text || "").trim();
+          console.log("🔥 MESSAGE:", text);
 
-        app.post("/api/messages", async (req, res) => {
-            console.log("📥 Request received at /api/messages");
-
-            try {
-                await adapter.process(req, res, async (turnContext) => {
-                    if (turnContext.activity.type !== "message") {
-                        console.log("Not a message activity");
-                        return;
-                    }
-
-                    const text = (turnContext.activity.text || "").trim();
-                    console.log("🔥 MESSAGE:", text);
-
-                    const ui = createTeamsUI(turnContext);
-console.log("▶️ Calling copilot.runStreaming");
-                    try {
-                        const result = await copilot.runStreaming(
-                            text,
-                            {
-                                userId: turnContext.activity.from?.id,
-                                tenantId: turnContext.activity.conversation?.tenantId
-                            },
-                            ui
-                        );
-console.log("✅ Copilot returned:", result);
-                        await ui.sendFinal(result.answer || "I received your message.");
-                    } catch (err) {
-                        console.error("❌ Copilot error:", err.message);
-                        await turnContext.sendActivity("Sorry, I had trouble with that request.");
-                    }
-                });
-            } catch (err) {
-                console.error("💥 Critical handler error:", err.message);
-            }
+          const ui = createTeamsUI(turnContext);
+          console.log("▶️ Calling copilot.runStreaming");
+          try {
+            const result = await copilot.runStreaming(
+              text,
+              {
+                userId: turnContext.activity.from?.id,
+                tenantId: turnContext.activity.conversation?.tenantId,
+              },
+              ui,
+            );
+            console.log("✅ Copilot returned:", result);
+            await ui.sendFinal(result.answer || "I received your message.");
+          } catch (err) {
+            console.error("❌ Copilot error:", err.message);
+            await turnContext.sendActivity(
+              "Sorry, I had trouble with that request.",
+            );
+          }
         });
+      } catch (err) {
+        console.error("💥 Critical handler error:", err.message);
+      }
+    });
 
-        app.listen(PORT, () => {
-            console.log(`🚀 MCP Server running on port ${PORT}`);
-        });
-
-    } catch (err) {
-        console.error("💥 Fatal startup error:", err);
-        process.exit(1);
-    }
+    app.listen(PORT, () => {
+      console.log(`🚀 MCP Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("💥 Fatal startup error:", err);
+    process.exit(1);
+  }
 }
 
 bootstrap();
