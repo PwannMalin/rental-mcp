@@ -127,12 +127,27 @@
       </div>
 
       <!-- QUICK ACTIONS  -->
+      <!-- PAGINATION / QUICK ACTIONS -->
       <div
-        class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 flex gap-2 flex-wrap"
+        id="paginationBar"
+        class="px-6 py-3 border-t border-zinc-700 bg-zinc-900 hidden"
       >
-        <div class="pagination-buttons flex gap-2 mt-2">
-          <button onclick="sendQuick('Prev 25')" class="...">← Prev 25</button>
-          <button onclick="sendQuick('Next 25')" class="...">Next 25 →</button>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            onclick="sendQuick('Prev 25')"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-500 rounded-2xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            <i class="fas fa-chevron-left text-xs opacity-70"></i>
+            Prev 25
+          </button>
+
+          <button
+            onclick="sendQuick('Next 25')"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-500 rounded-2xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            Next 25
+            <i class="fas fa-chevron-right text-xs opacity-70"></i>
+          </button>
         </div>
       </div>
 
@@ -258,10 +273,16 @@
         </div>
     `;
       }
+      function showPagination(show = true) {
+        const bar = document.getElementById("paginationBar");
+        if (!bar) return;
+        bar.classList.toggle("hidden", !show);
+      }
+
       function sendQuick(text) {
-  document.getElementById("message").value = text;
-  sendMessage();
-}
+        document.getElementById("message").value = text;
+        sendMessage();
+      }
 
       async function login() {
         try {
@@ -398,6 +419,11 @@
         console.log("RAW RESPONSE:", JSON.stringify(text));
         chat.appendChild(div);
         chat.scrollTop = chat.scrollHeight;
+        if (data.showPagination) {
+          showPagination(true);
+        } else {
+          showPagination(false);
+        }
       }
 
       function showTypingIndicator() {
