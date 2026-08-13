@@ -515,24 +515,7 @@ export class CopilotOrchestrator {
         };
       }
 
-      if (allCustomers.length === 100) {
-        // silently ask for more
-        const bigger = await this.registry.execute(
-          "search.execute",
-          {
-            type: "CUSTOMER",
-            SearchTerm: args.SearchTerm,
-            filterQuery: args.filterQuery,
-            topCount: 250,
-          },
-          context,
-        );
-
-        const moreRows = this.getRowsFromToolResult(bigger);
-        if (moreRows.length > allCustomers.length) {
-          allCustomers = moreRows.map(/* same mapping */);
-        }
-      }
+      
       if (text.includes("prev") || text.includes("previous")) {
         if (state.page > 0) {
           state.page -= 1;
@@ -610,76 +593,160 @@ export class CopilotOrchestrator {
         };
       }
 
-      // Branch or name narrowing
-      // (simple contains match against Branch or customerName)
-      const narrowed = state.allCustomers.filter(
-        (c) =>
-          c.Branch.toLowerCase().includes(text) ||
-          c.customerName.toLowerCase().includes(text),
-      );
+   // Branch or name narrowing (prefer server-side re-query)
 
-      if (narrowed.length > 0 && narrowed.length < state.allCustomers.length) {
-        state.filtered = narrowed;
-        state.page = 0;
+// Ignore pure navigation commands
+const isNav =
+  text.includes("next") ||
+  text.includes("prev") ||
+  text.includes("previous") ||
+  text.includes("only with open") ||
+  text.includes("only open") ||
+  text.includes("with requests") ||
+  text.includes("has requests") ||
+  text.includes("load more") ||
+  text.includes("show more");
 
-        if (narrowed.length <= 15) {
-          // small enough → enrich and go to selection
-          const enriched = [];
-          for (const customer of narrowed) {
-            try {
-              const rentalResult = await this.registry.execute(
-                "search.execute",
-                {
-                  type: "RENTAL",
-                  filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                  topCount: 50,
-                },
-                context,
-              );
-              const count = this.getRowsFromToolResult(rentalResult).length;
-              enriched.push({ ...customer, requestCount: count });
-            } catch {
-              enriched.push({ ...customer, requestCount: 0 });
-            }
+if (!isNav && text.length >= 2) {
+  const originalTerm = state.searchTerm || "";
+  const originalFilter = state.filterQuery || "";
+
+  // Build a combined filter when we still know the original customer name search
+  let newFilter = "";
+
+  if (originalFilter && originalFilter.includes("contains(CustomerName")) {
+    // e.g. contains(CustomerName,'Amazon') and Branch eq 'HOUSTON'
+    newFilter = `(${originalFilter}) and Branch eq '${text.toUpperCase()}'`;
+  } else if (originalTerm) {
+    newFilter = `contains(CustomerName,'${originalTerm.replace(/'/g, "''")}') and Branch eq '${text.toUpperCase()}'`;
+  }
+
+  // Fallback: also try client-side filter on what we already have
+  const clientNarrowed = state.allCustomers.filter(
+    (c) =>
+      c.Branch.toLowerCase().includes(text) ||
+      c.customerName.toLowerCase().includes(text)
+  );
+
+  if (newFilter) {
+    await ui.update(`Narrowing to branch/name “${text}”…`);
+
+    const refetch = await this.registry.execute(
+      "search.execute",
+      {
+        type: "CUSTOMER",
+        filterQuery: newFilter,
+        topCount: 100
+      },
+      context
+    );
+
+    const rows = this.getRowsFromToolResult(refetch);
+
+    if (rows.length > 0) {
+      const allCustomers = rows.map((row) => ({
+        CustomerNumber: this.getCleanValue(
+          row.CustomerNumber || row.customerNumber
+        ),
+        Branch: this.getCleanValue(row.Branch || row.branch),
+        customerName: this.getCleanValue(
+          row.CustomerName ||
+            row.customerName ||
+            row.Name ||
+            row.name
+        ),
+        requestCount: null
+      }));
+
+      // Small set → enrich and go to selection
+      if (allCustomers.length <= 15) {
+        const enriched = [];
+        for (const customer of allCustomers) {
+          try {
+            const rentalResult = await this.registry.execute(
+              "search.execute",
+              {
+                type: "RENTAL",
+                filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+                topCount: 50
+              },
+              context
+            );
+            const count = this.getRowsFromToolResult(rentalResult).length;
+            enriched.push({ ...customer, requestCount: count });
+          } catch {
+            enriched.push({ ...customer, requestCount: 0 });
           }
-
-          const withRequests = enriched.filter((c) => c.requestCount > 0);
-          this.pendingCustomerSelection = {
-            options: withRequests.length ? withRequests : enriched,
-          };
-          this.customerSearchState = null;
-          await this.saveSessionState(sessionKey);
-
-          const lines = (withRequests.length ? withRequests : enriched).map(
-            (c, i) =>
-              `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber}${c.requestCount != null ? ` — Requests: ${c.requestCount}` : ""}`,
-          );
-
-          return {
-            success: true,
-            answer:
-              `Narrowed to ${narrowed.length} customers` +
-              (withRequests.length
-                ? ` (${withRequests.length} with open requests)`
-                : "") +
-              `:\n\n${lines.join("\n")}\n\nReply with the number or Customer #.`,
-          };
         }
 
-        // still large → show first page of narrowed list
-        const { lines, nav } = this.formatCustomerPage(state);
+        const withRequests = enriched.filter((c) => c.requestCount > 0);
+        const list = withRequests.length ? withRequests : enriched;
+
+        this.pendingCustomerSelection = { options: list };
+        this.customerSearchState = null;
         await this.saveSessionState(sessionKey);
+
+        const lines = list.map(
+          (c, i) =>
+            `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber}${c.requestCount != null ? ` — Requests: ${c.requestCount}` : ""}`
+        );
+
         return {
           success: true,
           answer:
-            `Narrowed to ${narrowed.length} customers.\n\n` +
-            lines +
-            nav +
-            `\n\nYou can keep narrowing or use Next / Prev.`,
-          showPagination: true,
+            `Narrowed to ${list.length} customer(s) for “${originalTerm || "your search"}” in ${text.toUpperCase()}` +
+            (withRequests.length
+              ? ` (${withRequests.length} with open requests)`
+              : "") +
+            `:\n\n${lines.join("\n")}\n\nReply with the number or Customer #.`
         };
       }
+
+      // Still large → keep pagination state
+      state.allCustomers = allCustomers;
+      state.filtered = allCustomers;
+      state.page = 0;
+      state.filterQuery = newFilter;
+      state.hitLimit = allCustomers.length >= 100;
+
+      const { lines, nav } = this.formatCustomerPage(state);
+      await this.saveSessionState(sessionKey);
+
+      return {
+        success: true,
+        answer:
+          `Narrowed to ${allCustomers.length} customers` +
+          (state.hitLimit ? " (there may be more)" : "") +
+          ` for branch/name “${text}”.\n\n` +
+          lines +
+          nav +
+          `\n\nYou can keep narrowing, use Next/Prev, or say "only with open requests".`,
+        showPagination: true
+      };
     }
+  }
+
+  // If server re-query returned nothing, fall back to client-side filter
+  if (clientNarrowed.length > 0 && clientNarrowed.length < state.allCustomers.length) {
+    state.filtered = clientNarrowed;
+    state.page = 0;
+
+    if (clientNarrowed.length <= 15) {
+      // … same enrich + selection logic as above …
+    }
+
+    const { lines, nav } = this.formatCustomerPage(state);
+    await this.saveSessionState(sessionKey);
+    return {
+      success: true,
+      answer:
+        `Narrowed to ${clientNarrowed.length} customers (from the current list).\n\n` +
+        lines +
+        nav,
+      showPagination: true
+    };
+  }
+}}
     const selectionResult = await this.tryResolvePendingCustomerSelection(
       userInput,
       context,
@@ -862,7 +929,7 @@ export class CopilotOrchestrator {
                     const only = withRequests[0];
                     this.pendingCustomerSelection = null;
                     this.customerSearchState = null;
-
+                    await this.saveSessionState(sessionKey);
                     // Immediately fetch its rental requests (same logic as tryResolvePendingCustomerSelection)
                     const result = await this.registry.execute(
                       "search.execute",
@@ -913,9 +980,9 @@ export class CopilotOrchestrator {
                       return {
                         success: true,
                         answer:
-                          `Found 1 rental request for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n` +
-                          `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
-                          `You can say "show request lines", "details", or "equipment requested" for more information.`,
+                          `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
+`RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
+`You can say "show request lines", "details", or "equipment requested" for more information.`,
                         showPagination: false,
                       };
                     }
@@ -968,17 +1035,22 @@ export class CopilotOrchestrator {
                 // ---------- LARGE RESULT SET (> 15) → store state + ask to narrow ----------
                 const hitLimit = allCustomers.length >= 100;
 
-                this.customerSearchState = {
-                  allCustomers,
-                  filtered: allCustomers,
-                  page: 0,
-                  pageSize: 25,
-                  searchTerm: args.SearchTerm || "",
-                  filterQuery: args.filterQuery || "",
-                  onlyWithRequests: false,
-                  hitLimit, // ← new
-                  currentTopCount: args.topCount || 100,
-                };
+                
+                 this.customerSearchState = {
+  allCustomers,
+  filtered: allCustomers,
+  page: 0,
+  pageSize: 25,
+  searchTerm: args.SearchTerm || "",
+  filterQuery:
+    args.filterQuery ||
+    (args.SearchTerm
+      ? `contains(CustomerName,'${String(args.SearchTerm).replace(/'/g, "''")}')`
+      : ""),
+  onlyWithRequests: false,
+  hitLimit,
+  currentTopCount: args.topCount || 100,
+};
 
                 this.pendingCustomerSelection = null; // we are not yet in selection mode
 
@@ -1007,7 +1079,9 @@ export class CopilotOrchestrator {
                     `• Reply with a **branch** name (e.g. "Houston")\n` +
                     `• Give a more specific name (e.g. "Amazon Logistics")\n` +
                     `• Say **"only with open requests"** and I’ll check a larger sample\n` +
-                    `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse`,
+                    `• Say **"only with open requests"** and I’ll check a larger sample\n` +
+    `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
+    extraHint,   // ← add this
                   awaitingCustomerSelection: false,
                   showPagination: true,
                 };
