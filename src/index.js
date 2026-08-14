@@ -11,7 +11,8 @@ import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
 import { PublicClientApplication } from "@azure/msal-browser";
-import { runCritic } from "./agent/runCritic.js";
+import { runAgent, parseJsonFromAgent } from "./agent/runAgent.js";
+import { CRITIC_SYSTEM, buildCriticUserPayload } from "./agent/prompts/critic.js";
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);

@@ -1,6 +1,6 @@
 import { searchTool } from "./tools/searchTool.js";
-import { runAgent, parseJsonFromAgent } from "./runAgent.js";
-import { CRITIC_SYSTEM, buildCriticUserPayload } from "./prompts/critic.js";
+import { runAgent } from "./agent/runAgent.js";
+import { CRITIC_SYSTEM, buildCriticUserPayload } from "./agent/prompts/critic.js";
 
 export async function runCritic({
   llm,
