@@ -11,6 +11,7 @@ import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
 import { PublicClientApplication } from "@azure/msal-browser";
+import { runCritic } from "./agent/runCritic.js";
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
@@ -274,6 +275,32 @@ async function bootstrap() {
           : null,
       });
     });
+
+    app.post("/admin/critic", async (req, res) => {
+  try {
+    const { userInput, draftAnswer, toolSummary, sessionHints } = req.body || {};
+
+    if (!userInput || !draftAnswer) {
+      return res.status(400).json({
+        success: false,
+        error: "userInput and draftAnswer are required",
+      });
+    }
+
+    const critique = await runCritic({
+      llm, // same createAzureOpenAI() instance you use for the orchestrator
+      userInput,
+      draftAnswer,
+      toolSummary: toolSummary || null,
+      sessionHints: sessionHints || null,
+    });
+
+    res.json({ success: true, critique });
+  } catch (err) {
+    console.error("CRITIC ERROR", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
     app.get("/test/request-lines", async (req, res) => {
       const tool = toolSource["search.execute"];
