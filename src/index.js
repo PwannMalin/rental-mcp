@@ -11,8 +11,9 @@ import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
 import { PublicClientApplication } from "@azure/msal-browser";
-import { runAgent, parseJsonFromAgent } from "./agent/runAgent.js";
-import { CRITIC_SYSTEM, buildCriticUserPayload } from "./agent/prompts/critic.js";
+
+import { runCritic } from "./agent/runCritic.js";
+
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
@@ -277,7 +278,29 @@ async function bootstrap() {
       });
     });
 
-    app.post("/admin/critic", async (req, res) => {
+    app.get("/admin/llm-ping", async (req, res) => {
+  try {
+    const r = await llm.chat.completions.create({
+      model: process.env.AZURE_OPENAI_DEPLOYMENT,
+      messages: [{ role: "user", content: "Reply with OK" }],
+      max_tokens: 10,
+    });
+    res.json({
+      success: true,
+      deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
+      content: r.choices?.[0]?.message?.content,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
+      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+      error: err.message,
+    });
+  }
+});
+
+    app.post("/admin/critic",  async (req, res) => {
   try {
     const { userInput, draftAnswer, toolSummary, sessionHints } = req.body || {};
 
