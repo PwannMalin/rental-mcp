@@ -15,3 +15,4 @@ build/
 secret
 *.log
 .vscode/settings.json
+rental-mcp/logs/critiques.jsonl

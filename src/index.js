@@ -13,6 +13,7 @@ import { createTeamsUI } from "./ui/createTeamsUI.js";
 import { PublicClientApplication } from "@azure/msal-browser";
 
 import { runCritic } from "./agent/runCritic.js";
+import { logCritique } from "./agent/critiqueStore.js";
 
 
 console.log("🔥 ENTRY FILE LOADED");
@@ -280,44 +281,13 @@ async function bootstrap() {
 
     app.get("/admin/llm-ping", async (req, res) => {
   try {
-    const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || "").replace(/\/$/, "");
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    const apiVersion =
-      process.env.AZURE_OPENAI_API_VERSION || "2024-12-01-preview";
-    const key = process.env.AZURE_OPENAI_API_KEY;
-
-    const url =
-      `${endpoint}/openai/deployments/${deployment}/chat/completions` +
-      `?api-version=${apiVersion}`;
-
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "api-key": key || "",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: "Say OK" }],
-        max_tokens: 10,
-      }),
+    const r = await llm.chat.completions.create({
+      messages: [{ role: "user", content: "Reply with OK" }],
+      max_tokens: 10,
     });
-
-    const text = await r.text();
-    let body;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = text;
-    }
-
-    res.status(r.ok ? 200 : r.status).json({
-      success: r.ok,
-      status: r.status,
-      url,
-      keyLength: key ? key.length : 0,
-      apiVersion,
-      deployment,
-      body,
+    res.json({
+      success: true,
+      content: r.choices?.[0]?.message?.content,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -342,6 +312,16 @@ async function bootstrap() {
       toolSummary: toolSummary || null,
       sessionHints: sessionHints || null,
     });
+
+    await logCritique({
+  userInput,
+  draftAnswer,
+  toolSummary: toolSummary || null,
+  sessionHints: sessionHints || null,
+  critique,
+});
+
+res.json({ success: true, critique });
 
     res.json({ success: true, critique });
   } catch (err) {
