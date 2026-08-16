@@ -280,23 +280,47 @@ async function bootstrap() {
 
     app.get("/admin/llm-ping", async (req, res) => {
   try {
-    const r = await llm.chat.completions.create({
-      model: process.env.AZURE_OPENAI_DEPLOYMENT,
-      messages: [{ role: "user", content: "Reply with OK" }],
-      max_tokens: 10,
+    const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || "").replace(/\/$/, "");
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const apiVersion =
+      process.env.AZURE_OPENAI_API_VERSION || "2024-12-01-preview";
+    const key = process.env.AZURE_OPENAI_API_KEY;
+
+    const url =
+      `${endpoint}/openai/deployments/${deployment}/chat/completions` +
+      `?api-version=${apiVersion}`;
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "api-key": key || "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Say OK" }],
+        max_tokens: 10,
+      }),
     });
-    res.json({
-      success: true,
-      deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
-      content: r.choices?.[0]?.message?.content,
+
+    const text = await r.text();
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+
+    res.status(r.ok ? 200 : r.status).json({
+      success: r.ok,
+      status: r.status,
+      url,
+      keyLength: key ? key.length : 0,
+      apiVersion,
+      deployment,
+      body,
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
-      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-      error: err.message,
-    });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

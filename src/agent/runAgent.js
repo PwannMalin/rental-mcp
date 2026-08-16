@@ -18,34 +18,55 @@ export async function runAgent({
 
   const messages = [
     { role: "system", content: system },
-    { role: "user", content: typeof user === "string" ? user : JSON.stringify(user) },
+    {
+      role: "user",
+      content: typeof user === "string" ? user : JSON.stringify(user),
+    },
   ];
 
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+  if (!deployment) {
+    throw new Error("AZURE_OPENAI_DEPLOYMENT is not set");
+  }
+
   const payload = {
-    model: process.env.AZURE_OPENAI_DEPLOYMENT,
+    model: deployment,
     messages,
-    temperature,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
   };
+
+  if (typeof temperature === "number") {
+    payload.temperature = temperature;
+  }
 
   if (tools?.length && toolChoice !== "none") {
     payload.tools = tools;
     payload.tool_choice = toolChoice;
   }
 
-  const response = await llm.chat.completions.create(payload);
-  const message = response.choices?.[0]?.message;
-
-  if (!message) {
-    throw new Error("runAgent: empty LLM response");
+  try {
+    const response = await llm.chat.completions.create(payload);
+    const message = response.choices?.[0]?.message;
+    if (!message) {
+      throw new Error("runAgent: empty LLM response");
+    }
+    return {
+      content: message.content || "",
+      tool_calls: message.tool_calls || null,
+      raw: message,
+    };
+  } catch (err) {
+    console.error("runAgent Azure error:", {
+      message: err.message,
+      status: err.status,
+      code: err.code,
+      error: err.error,
+      deployment,
+      apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+    });
+    throw err;
   }
-
-  return {
-    content: message.content || "",
-    tool_calls: message.tool_calls || null,
-    raw: message,
-  };
-}
+} // ← closes runAgent
 
 /**
  * Extract JSON from model output (handles ```json fences).
@@ -57,13 +78,11 @@ export function parseJsonFromAgent(content) {
 
   let text = content.trim();
 
-  // Strip markdown code fence if present
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) {
     text = fence[1].trim();
   }
 
-  // Fallback: first { ... } block
   if (!text.startsWith("{")) {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
