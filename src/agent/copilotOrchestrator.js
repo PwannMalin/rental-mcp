@@ -898,33 +898,36 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
    
 
-if (requestActionResult) {
-  return requestActionResult;
-}
+
+
+      // 1) Customer pick (e.g. "1" or customer #)
     const selectionResult = await this.tryResolvePendingCustomerSelection(
       userInput,
       context,
-      ui,
+      ui
     );
     if (selectionResult) {
       return selectionResult;
     }
 
- const requestSelectionResult = await this.tryResolvePendingRequestSelection(
-  userInput,
-  context,
-  ui,
-);
+    // 2) Request pick (when multiple RequestIDs were listed)
+    const requestSelectionResult =
+      await this.tryResolvePendingRequestSelection(userInput, context, ui);
+    if (requestSelectionResult) {
+      return requestSelectionResult;
+    }
 
-if (requestSelectionResult) {
-  return requestSelectionResult;
-}
+    // 3) Request lines / equipment for activeRequest
+    const requestActionResult = await this.tryResolvePendingRequestAction(
+      userInput,
+      context,
+      ui
+    );
+    if (requestActionResult) {
+      return requestActionResult;
+    }
 
-const requestActionResult = await this.tryResolvePendingRequestAction(
-  userInput,
-  context,
-  ui,
-);
+   
 
 
 
