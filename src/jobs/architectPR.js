@@ -186,7 +186,7 @@ if (!branchResult?.success) {
   throw new Error(branchResult?.error || "createBranch failed");
 }
 const filesToPatch = (plan.files || []).filter((f) => isAllowedPath(f.path));
-
+const patchedPaths = [];
   for (const fileSpec of filesToPatch) {
     const pathName = fileSpec.path; // e.g. src/agent/copilotOrchestrator.js
 
@@ -323,10 +323,18 @@ const filesToPatch = (plan.files || []).filter((f) => isAllowedPath(f.path));
     `### Acceptance criteria`,
     ...(row.critique?.acceptanceCriteria || []).map((i) => `- ${i}`),
     ``,
-    `### Code changes`,
-  `- Patched \`src/agent/copilotOrchestrator.js\` via Architect search/replace (when replacements applied)`,
-  `- Review the diff carefully before merge`,
-  ``,
+    ...(patchedPaths.length
+  ? [
+      `### Code changes`,
+      ...patchedPaths.map((p) => `- Patched \`${p}\``),
+      `- Review the diff carefully before merge`,
+      ``,
+    ]
+  : [
+      `### Code changes`,
+      `- No source patch applied (plan/docs only)`,
+      ``,
+    ]),
     `> Draft PR from Architect job. Review carefully before merge.`,
   ].join("\n");
 
