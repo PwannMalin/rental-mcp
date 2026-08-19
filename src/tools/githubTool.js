@@ -134,44 +134,64 @@ const createBranchTool = () => ({
         "Create a new GitHub branch from an existing base branch, usually main.",
     tags: ["github", "branch", "create"],
 
-    async handler(input = {}) {
-        const owner = input.owner || DEFAULT_OWNER;
-        const repo = input.repo || DEFAULT_REPO;
-        const baseBranch = input.baseBranch || DEFAULT_BASE_BRANCH;
-        const branchName = normalizeBranchName(input.branchName);
+   async handler(input = {}) {
+  const owner = input.owner || DEFAULT_OWNER;
+  const repo = input.repo || DEFAULT_REPO;
 
-        const baseRef = await githubFetch(
-            `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`
-        );
+  const baseBranch =
+    input.baseBranch ||
+    input.fromBranch ||
+    input.from ||
+    input.base ||
+    DEFAULT_BASE_BRANCH;
 
-        const baseSha = baseRef.object?.sha;
+  const branchName = normalizeBranchName(
+    input.branchName || input.branch || input.name
+  );
 
-        if (!baseSha) {
-            throw new Error(`Could not find SHA for base branch '${baseBranch}'.`);
-        }
+  const baseRef = await githubFetch(
+    `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`
+  );
 
-        const createdRef = await githubFetch(
-            `/repos/${owner}/${repo}/git/refs`,
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    ref: `refs/heads/${branchName}`,
-                    sha: baseSha
-                })
-            }
-        );
+  const baseSha = baseRef.object?.sha;
+  if (!baseSha) {
+    throw new Error(`Could not find SHA for base branch '${baseBranch}'.`);
+  }
 
-        return {
-            success: true,
-            owner,
-            repo,
-            baseBranch,
-            branchName,
-            ref: createdRef.ref,
-            sha: createdRef.object?.sha,
-            url: createdRef.url
-        };
+  try {
+    const createdRef = await githubFetch(`/repos/${owner}/${repo}/git/refs`, {
+      method: "POST",
+      body: JSON.stringify({
+        ref: `refs/heads/${branchName}`,
+        sha: baseSha,
+      }),
+    });
+
+    return {
+      success: true,
+      owner,
+      repo,
+      baseBranch,
+      branchName,
+      ref: createdRef.ref,
+      sha: createdRef.object?.sha,
+      url: createdRef.url,
+    };
+  } catch (err) {
+    // Branch already exists → OK for PR flow
+    if (String(err.message).includes("422")) {
+      return {
+        success: true,
+        owner,
+        repo,
+        baseBranch,
+        branchName,
+        note: "branch already exists",
+      };
     }
+    throw err;
+  }
+},
 });
 
 const getFileTool = () => ({
@@ -290,45 +310,40 @@ const createPullRequestTool = () => ({
     tags: ["github", "pull request", "pr", "create"],
 
     async handler(input = {}) {
-        const owner = input.owner || DEFAULT_OWNER;
-        const repo = input.repo || DEFAULT_REPO;
-        const head = input.branch || input.head;
-        const base = input.base || DEFAULT_BASE_BRANCH;
-        const title = input.title;
-        const body = input.body || input.description || "";
+  const owner = input.owner || DEFAULT_OWNER;
+  const repo = input.repo || DEFAULT_REPO;
+  const head = input.head || input.branch;
+  const base = input.base || DEFAULT_BASE_BRANCH;
+  const title = input.title;
+  const body = input.body || input.description || "";
+  const draft = input.draft === true;
 
-        if (!head) {
-            throw new Error("branch or head is required.");
-        }
+  if (!head) throw new Error("branch or head is required.");
+  if (!title) throw new Error("title is required.");
 
-        if (!title) {
-            throw new Error("title is required.");
-        }
+  const pr = await githubFetch(`/repos/${owner}/${repo}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      head,
+      base,
+      body,
+      draft,
+    }),
+  });
 
-        const pr = await githubFetch(
-            `/repos/${owner}/${repo}/pulls`,
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    title,
-                    head,
-                    base,
-                    body
-                })
-            }
-        );
-
-        return {
-            success: true,
-            owner,
-            repo,
-            number: pr.number,
-            title: pr.title,
-            url: pr.html_url,
-            head: pr.head?.ref,
-            base: pr.base?.ref
-        };
-    }
+  return {
+    success: true,
+    owner,
+    repo,
+    number: pr.number,
+    title: pr.title,
+    url: pr.html_url,
+    head: pr.head?.ref,
+    base: pr.base?.ref,
+    draft: pr.draft,
+  };
+},
 });
 
 export function githubTool(context = {}) {
