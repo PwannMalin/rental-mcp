@@ -15,7 +15,7 @@ import { PublicClientApplication } from "@azure/msal-browser";
 import { runCritic } from "./agent/runCritic.js";
 import { logCritique } from "./agent/critiqueStore.js";
 import { logChatTurn } from "./agent/chatLog.js";
-
+import { spawnCriticBatch, spawnCriticPipeline } from "./jobs/runCriticBatchSpawn.js";
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
@@ -354,7 +354,25 @@ res.json({ success: true, critique });
     });
 
    app.post("/chat", async (req, res) => {
-  const message = req.body.message;
+  const message = (req.body.message || "").trim();
+
+  // Admin: critic only
+  if (/^\/critic\b/i.test(message) || /^run critic$/i.test(message)) {
+    spawnCriticBatch();
+    return res.json({
+      success: true,
+      answer: "Critic batch started. Check logs/critiques.jsonl in a minute.",
+    });
+  }
+
+  // Optional: full pipeline (draft PRs possible)
+  if (/^\/pipeline\b/i.test(message) || /^run pipeline$/i.test(message)) {
+    spawnCriticPipeline();
+    return res.json({
+      success: true,
+      answer: "Full critic pipeline started (critic → notify → architect). Check GitHub for draft PRs.",
+    });
+  }
 
   try {
     const result = await copilot.runStreaming(
