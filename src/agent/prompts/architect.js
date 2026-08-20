@@ -44,6 +44,8 @@ Given the current file content and a fix instruction, return ONLY JSON:
 }
 
 Rules:
+- "new" MUST differ from "old"
+- Implement the required fix; do not return identical strings
 - old must appear EXACTLY once in the file (copy verbatim from the provided source)
 - Prefer the smallest change that implements the instruction
 - Do not rewrite the entire file

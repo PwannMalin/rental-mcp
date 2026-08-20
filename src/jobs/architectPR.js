@@ -241,11 +241,20 @@ const patchedPaths = [];
       continue;
     }
 
-    console.log(`Applying ${patchPlan.replacements.length} replacement(s)...`);
-    const updated = applyReplacements(original, patchPlan.replacements);
+        console.log(`Applying ${patchPlan.replacements.length} replacement(s)...`);
+    let updated;
+    try {
+      updated = applyReplacements(original, patchPlan.replacements);
+    } catch (err) {
+      console.warn(`Skip patch for ${pathName}: ${err.message}`);
+      continue;
+    }
 
     if (updated === original) {
-      throw new Error("Patch produced no content change");
+      console.warn(
+        `Patch produced no content change for ${pathName}; continuing with plan-only PR`
+      );
+      continue;
     }
 
     const updateResult = await registry.execute("github.updateFile", {
@@ -256,6 +265,8 @@ const patchedPaths = [];
       content: updated,
       message: `fix: ${plan.prTitle || row.critique?.summary || row.fingerprint}`.slice(0, 72),
     });
+    // ... check success ...
+    patchedPaths.push(pathName);
 
     console.log("updateFile result:", JSON.stringify(updateResult, null, 2));
     const ok = updateResult?.success !== false && (updateResult?.data?.success !== false);
