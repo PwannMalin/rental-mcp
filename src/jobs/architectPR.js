@@ -7,6 +7,7 @@ import { runAgent, parseJsonFromAgent } from "../agent/runAgent.js";
 import {
   ARCHITECT_SYSTEM,
   buildArchitectUserPayload,
+  PATCH_SYSTEM,
 } from "../agent/prompts/architect.js";
 import { logCritique } from "../agent/critiqueStore.js";
 
