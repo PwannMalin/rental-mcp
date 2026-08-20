@@ -768,6 +768,8 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         let newFilter = "";
         if (originalFilter && originalFilter.includes("contains(CustomerName")) {
           newFilter = `(${originalFilter}) and Branch eq '${text.toUpperCase()}'`;
+        } else if (originalFilter && originalFilter.length > 0) {
+          newFilter = `(${originalFilter}) and Branch eq '${text.toUpperCase()}'`;
         } else if (originalTerm) {
           newFilter = `contains(CustomerName,'${originalTerm.replace(/'/g, "''")}') and Branch eq '${text.toUpperCase()}'`;
         }
