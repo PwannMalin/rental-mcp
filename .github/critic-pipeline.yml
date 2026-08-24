@@ -1,6 +1,10 @@
 name: Critic Pipeline
 
 on:
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
   # Run automatically every day at 06:00 UTC (change as needed)
   schedule:
     - cron: '0 6 * * *'
