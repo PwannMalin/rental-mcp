@@ -1,0 +1,74 @@
+name: Critic Pipeline
+
+on:
+  # Run automatically every day at 06:00 UTC (change as needed)
+  schedule:
+    - cron: '0 6 * * *'
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  critic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Needed so architectPr can push / open PRs
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run critic pipeline
+        env:
+          # Required secrets (you must add these in repo Settings → Secrets)
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITTHUB_TOKEN }}   # or a PAT with repo + workflow scope
+          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+
+          # Same values your .ps1 was setting
+          GITHUB_OWNER: PwannMalin
+          GITHUB_REPO: rental-mcp
+          GITHUB_BASE_BRANCH: main
+          NOTIFY_INCLUDE_HIGH_LOGIC: "false"
+          CRITIC_BATCH_LIMIT: "30"
+        run: |
+          set -e
+          mkdir -p logs
+          STAMP=$(date +%Y-%m-%d_%H-%M-%S)
+          LOG=logs/pipeline_$STAMP.log
+
+          echo "$(date -Iseconds)  === Critic pipeline start ===" | tee -a $LOG
+
+          echo "$(date -Iseconds)  1/3 criticBatch..." | tee -a $LOG
+          node src/jobs/criticBatch.js 2>&1 | tee -a $LOG
+          echo "$(date -Iseconds)  criticBatch exit: $?" | tee -a $LOG
+
+          echo "$(date -Iseconds)  2/3 notifyCritiques..." | tee -a $LOG
+          node src/jobs/notifyCritiques.js 2>&1 | tee -a $LOG
+          echo "$(date -Iseconds)  notifyCritiques exit: $?" | tee -a $LOG
+
+          echo "$(date -Iseconds)  3/3 architectPr..." | tee -a $LOG
+          node src/jobs/architectPr.js 2>&1 | tee -a $LOG
+          echo "$(date -Iseconds)  architectPr exit: $?" | tee -a $LOG
+
+          echo "$(date -Iseconds)  === Critic pipeline done ===" | tee -a $LOG
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critic-pipeline-log
+          path: logs/
+          retention-days: 14
