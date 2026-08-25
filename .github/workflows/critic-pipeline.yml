@@ -35,7 +35,7 @@ jobs:
       - name: Run critic pipeline
         env:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.gitthub_secret }}   # your custom token for creating PRs
+          GITHUB_TOKEN: ${{ secrets.GITTHUB_TOKEN }}   # your custom token for creating PRs
           NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
           GITHUB_OWNER: PwannMalin
           GITHUB_REPO: rental-mcp
