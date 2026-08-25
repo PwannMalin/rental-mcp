@@ -59,7 +59,7 @@ jobs:
           echo "$(date -Iseconds)  notifyCritiques exit: $?" | tee -a "$LOG"
 
           echo "$(date -Iseconds)  3/3 architectPr..." | tee -a "$LOG"
-          node src/jobs/architectPr.js 2>&1 | tee -a "$LOG"
+          node src/jobs/architectPR.js 2>&1 | tee -a "$LOG"          # ← fixed casing
           echo "$(date -Iseconds)  architectPr exit: $?" | tee -a "$LOG"
 
           echo "$(date -Iseconds)  === Critic pipeline done ===" | tee -a "$LOG"
