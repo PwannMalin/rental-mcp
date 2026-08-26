@@ -7,25 +7,21 @@ import { runCritic } from "../agent/runCritic.js";
 import { logCritique } from "../agent/critiqueStore.js";
 import { getChatsContainer } from "../db/cosmos.js";
 
-// ... keep the rest of the imports
-
-
-const CHAT_LOG = path.resolve("logs/chats.jsonl");
 const CRITIQUE_LOG = path.resolve("logs/critiques.jsonl");
 const DEFAULT_LIMIT = 20;
+
 async function readChatsFromCosmos(limit = 50) {
   const container = getChatsContainer();
 
-  // Get the most recent chats that haven't been critiqued yet
-  // (we'll filter already-critiqued ones later)
   const query = {
     query: "SELECT * FROM c ORDER BY c.ts DESC OFFSET 0 LIMIT @limit",
-    parameters: [{ name: "@limit", value: limit * 3 }], // grab extra in case many are already done
+    parameters: [{ name: "@limit", value: limit * 3 }],
   };
 
   const { resources } = await container.items.query(query).fetchAll();
   return resources;
 }
+
 async function readJsonl(filePath) {
   try {
     const text = await fs.readFile(filePath, "utf8");
@@ -54,9 +50,6 @@ function shouldCritique(chat) {
   return true;
 }
 
-/**
- * Map Critic output → what we might do later.
- */
 function classifyAction(critique) {
   if (!critique || critique.error) return "ignore";
   if (critique.approve === true) return "ignore";
@@ -71,7 +64,6 @@ function classifyAction(critique) {
     .join(" ")
     .toLowerCase();
 
-  // External systems the bot cannot edit via PR
   if (
     /power automate|powerautomate|\bpa\b|dataverse|laserfiche|flow url|connector|sharepoint/.test(
       text
@@ -83,7 +75,6 @@ function classifyAction(critique) {
   if (critique.fixType === "prompt") return "prompt";
   if (critique.fixType === "logic") return "logic";
 
-  // Default: treat needsCodeChange as logic
   return "logic";
 }
 
@@ -105,14 +96,12 @@ async function main() {
   const chats = await readChatsFromCosmos(limit);
   const prior = await readJsonl(CRITIQUE_LOG);
 
-  const already = new Set(
-    prior.map((p) => p.chatId).filter(Boolean)
-  );
+  const already = new Set(prior.map((p) => p.chatId).filter(Boolean));
 
   const candidates = chats
     .filter(shouldCritique)
     .filter((c) => !already.has(c.id))
-    .slice(-limit);
+    .slice(0, limit); // take the newest ones
 
   console.log(
     `Critic batch: ${candidates.length} new chat(s) ` +
@@ -124,7 +113,7 @@ async function main() {
 
   for (const chat of candidates) {
     try {
-      console.log(`→ ${chat.id}: "${chat.userInput.slice(0, 60)}"`);
+      console.log(`→ ${chat.id}: "${(chat.userInput || "").slice(0, 60)}"`);
 
       const critique = await runCritic({
         llm,
