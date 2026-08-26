@@ -5,11 +5,27 @@ import crypto from "crypto";
 import { createAzureOpenAI } from "../llm/azureOpenAI.js";
 import { runCritic } from "../agent/runCritic.js";
 import { logCritique } from "../agent/critiqueStore.js";
+import { getChatsContainer } from "../db/cosmos.js";
+
+// ... keep the rest of the imports
+
 
 const CHAT_LOG = path.resolve("logs/chats.jsonl");
 const CRITIQUE_LOG = path.resolve("logs/critiques.jsonl");
 const DEFAULT_LIMIT = 20;
+async function readChatsFromCosmos(limit = 50) {
+  const container = getChatsContainer();
 
+  // Get the most recent chats that haven't been critiqued yet
+  // (we'll filter already-critiqued ones later)
+  const query = {
+    query: "SELECT * FROM c ORDER BY c.ts DESC OFFSET 0 LIMIT @limit",
+    parameters: [{ name: "@limit", value: limit * 3 }], // grab extra in case many are already done
+  };
+
+  const { resources } = await container.items.query(query).fetchAll();
+  return resources;
+}
 async function readJsonl(filePath) {
   try {
     const text = await fs.readFile(filePath, "utf8");
@@ -86,7 +102,7 @@ async function main() {
   const limit = Number(process.env.CRITIC_BATCH_LIMIT || DEFAULT_LIMIT);
   const llm = createAzureOpenAI();
 
-  const chats = await readJsonl(CHAT_LOG);
+  const chats = await readChatsFromCosmos(limit);
   const prior = await readJsonl(CRITIQUE_LOG);
 
   const already = new Set(

@@ -11,7 +11,7 @@ if (-not $env:NOTIFY_EMAIL_TO) { throw "NOTIFY_EMAIL_TO not set" }
 $env:GITHUB_OWNER = "PwannMalin"
 $env:GITHUB_REPO = "rental-mcp"
 $env:GITHUB_BASE_BRANCH = "main"
-
+          
 $env:NOTIFY_INCLUDE_HIGH_LOGIC = "false"
 $env:CRITIC_BATCH_LIMIT = "30"
 
