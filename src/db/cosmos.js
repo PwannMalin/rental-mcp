@@ -1,10 +1,9 @@
 import { CosmosClient } from "@azure/cosmos";
 
-let container = null;
+let chatsContainer = null;
+let critiquesContainer = null;
 
-export function getChatsContainer() {
-  if (container) return container;
-
+function getClient() {
   const endpoint = process.env.COSMOS_ENDPOINT;
   const key = process.env.COSMOS_KEY;
 
@@ -12,9 +11,17 @@ export function getChatsContainer() {
     throw new Error("COSMOS_ENDPOINT or COSMOS_KEY is missing");
   }
 
-  const client = new CosmosClient({ endpoint, key });
-  const database = client.database("rental");
-  container = database.container("chats");
+  return new CosmosClient({ endpoint, key });
+}
 
-  return container;
+export function getChatsContainer() {
+  if (chatsContainer) return chatsContainer;
+  chatsContainer = getClient().database("rental").container("chats");
+  return chatsContainer;
+}
+
+export function getCritiquesContainer() {
+  if (critiquesContainer) return critiquesContainer;
+  critiquesContainer = getClient().database("rental").container("critiques");
+  return critiquesContainer;
 }

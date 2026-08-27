@@ -1,6 +1,4 @@
 import "dotenv/config";
-import fs from "fs/promises";
-import path from "path";
 import { createAzureOpenAI } from "../llm/azureOpenAI.js";
 import { createRegistry } from "../logic/toolBootstrap.js";
 import { runAgent, parseJsonFromAgent } from "../agent/runAgent.js";
@@ -9,9 +7,13 @@ import {
   buildArchitectUserPayload,
   PATCH_SYSTEM,
 } from "../agent/prompts/architect.js";
-import { logCritique } from "../agent/critiqueStore.js";
+import {
+  logCritique,
+  readOpenCritiques,
+  readAllCritiques,
+  markCritique,
+} from "../agent/critiqueStore.js";
 
-const CRITIQUE_LOG = path.resolve("logs/critiques.jsonl");
 const OWNER = process.env.GITHUB_OWNER || "PwannMalin";
 const REPO = process.env.GITHUB_REPO || "rental-mcp";
 const BASE = process.env.GITHUB_BASE_BRANCH || "main";
@@ -97,15 +99,19 @@ function pickCritique(rows, fingerprint) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const rows = await readJsonl(CRITIQUE_LOG);
+    const rows = await readAllCritiques();
+  const openRows = await readOpenCritiques();
 
   // Skip fingerprints that already have a PR marker
-  const prOpened = new Set(
-    rows.filter((r) => r.status === "pr_opened").map((r) => r.fingerprint)
+    const prOpened = new Set(
+    rows
+      .filter((r) => r.status === "pr_opened" || r.status === "pr-opened")
+      .map((r) => r.fingerprint)
+      .filter(Boolean)
   );
 
   let row = pickCritique(
-    rows.filter((r) => !prOpened.has(r.fingerprint)),
+    openRows.filter((r) => !prOpened.has(r.fingerprint)),
     args.fingerprint
   );
 
@@ -138,6 +144,7 @@ async function main() {
 
   if (!plan.canPatchCode) {
     console.log("Architect: canPatchCode=false — logging developer notes only");
+    await markCritique(row.id, { status: "needs_human" });
     await logCritique({
       ...row,
       id: undefined,
@@ -365,6 +372,11 @@ const patchedPaths = [];
     console.error("createPullRequest failed:", err.message);
     process.exit(1);
   }
+
+  await markCritique(row.id, {
+    status: "pr_opened",
+    pr: prResult,
+  });
 
   await logCritique({
     chatId: row.chatId,

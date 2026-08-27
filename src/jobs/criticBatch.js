@@ -6,6 +6,7 @@ import { createAzureOpenAI } from "../llm/azureOpenAI.js";
 import { runCritic } from "../agent/runCritic.js";
 import { logCritique } from "../agent/critiqueStore.js";
 import { getChatsContainer } from "../db/cosmos.js";
+import { logCritique, readAllCritiques } from "../agent/critiqueStore.js";
 
 const CRITIQUE_LOG = path.resolve("logs/critiques.jsonl");
 const DEFAULT_LIMIT = 20;
@@ -94,8 +95,8 @@ async function main() {
   const llm = createAzureOpenAI();
 
   const chats = await readChatsFromCosmos(limit);
-  const prior = await readJsonl(CRITIQUE_LOG);
-
+  
+  const prior = await readAllCritiques();
   const already = new Set(prior.map((p) => p.chatId).filter(Boolean));
 
   const candidates = chats
