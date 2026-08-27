@@ -232,19 +232,15 @@ const patchedPaths = [];
       system: PATCH_SYSTEM,
       user: patchUser,
       temperature: 0,
-      maxTokens: 4000,
+      maxTokens: 8000,
     });
 
-    let patchPlan;
+        let patchPlan;
     try {
       patchPlan = parseJsonFromAgent(patchRaw.content);
     } catch (err) {
-      throw new Error(`Patch JSON parse failed: ${err.message}\n${patchRaw.content?.slice(0, 400)}`);
-    }
-
-    if (!patchPlan.replacements?.length) {
-      console.warn(`No replacements for ${pathName}: ${patchPlan.notes || ""}`);
-      // Still write the docs plan so the PR isn't empty
+      console.warn(`Patch JSON parse failed for ${pathName}: ${err.message}`);
+      console.warn(patchRaw.content?.slice(0, 400));
       continue;
     }
 
