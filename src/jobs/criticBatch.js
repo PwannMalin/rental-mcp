@@ -4,7 +4,7 @@ import path from "path";
 import crypto from "crypto";
 import { createAzureOpenAI } from "../llm/azureOpenAI.js";
 import { runCritic } from "../agent/runCritic.js";
-import { logCritique } from "../agent/critiqueStore.js";
+
 import { getChatsContainer } from "../db/cosmos.js";
 import { logCritique, readAllCritiques } from "../agent/critiqueStore.js";
 
