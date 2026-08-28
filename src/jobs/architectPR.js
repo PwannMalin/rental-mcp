@@ -186,38 +186,54 @@ console.log("createBranch result:", JSON.stringify(branchResult, null, 2));
 if (!branchResult?.success) {
   throw new Error(branchResult?.error || "createBranch failed");
 }
-const filesToPatch = (plan.files || []).filter((f) => isAllowedPath(f.path));
+const FILE_ALIASES = {
+  "src/agent/customerSearch.js": "src/agent/copilotOrchestrator.js",
+};
+
+const filesToPatch = (plan.files || [])
+  .map((f) => ({
+    ...f,
+    path: FILE_ALIASES[f.path] || f.path,
+  }))
+  .filter((f) => isAllowedPath(f.path));
+
 const patchedPaths = [];
-  for (const fileSpec of filesToPatch) {
-    const pathName = fileSpec.path; // e.g. src/agent/copilotOrchestrator.js
 
-    console.log(`Fetching ${pathName} from ${BASE}...`);
-    const fileResult = await registry.execute("github.getFile", {
-      owner: OWNER,
-      repo: REPO,
-      path: pathName,
-      branch: BASE, // start from main content
-    });
+for (const fileSpec of filesToPatch) {
+  const pathName = fileSpec.path;
 
-    // Tool registry may wrap as { success, data }
-    const fileData = fileResult?.data || fileResult;
-    const original = fileData?.content;
-    if (!original || typeof original !== "string") {
-      throw new Error(`getFile failed for ${pathName}: ${JSON.stringify(fileResult)}`);
-    }
+  console.log(`Fetching ${pathName} from ${BASE}...`);
+  const fileResult = await registry.execute("github.getFile", {
+    owner: OWNER,
+    repo: REPO,
+    path: pathName,
+    branch: BASE,
+  });
+
+  const fileData = fileResult?.data || fileResult;
+  const original = fileData?.content;
+
+  if (fileResult?.success === false || !original || typeof original !== "string") {
+    console.warn(
+      `Skip missing file ${pathName}: ${fileResult?.error || "no content"}`
+    );
+    continue;
+  }
+
+  const patchUser = {
+    path: pathName,
+    instruction: fileSpec.instruction,
+    criticSummary: row.critique?.summary,
+    requiredFixes: row.critique?.requiredFixes,
+    source:
+      original.length > 180000
+        ? original.slice(0, 180000) + "\n\n/* TRUNCATED */"
+        : original,
+  };
 
     // If file is huge, only send relevant slices to the model (optional optimization).
     // For v1, send full file if under ~200k chars; else send instruction + key sections.
-    const patchUser = {
-      path: pathName,
-      instruction: fileSpec.instruction,
-      criticSummary: row.critique?.summary,
-      requiredFixes: row.critique?.requiredFixes,
-      // Truncate if needed:
-      source: original.length > 180000
-        ? original.slice(0, 180000) + "\n\n/* TRUNCATED */"
-        : original,
-    };
+    
 
     console.log(`Asking model for patches on ${pathName}...`);
     const patchRaw = await runAgent({
