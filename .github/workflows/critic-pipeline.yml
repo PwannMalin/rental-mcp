@@ -45,7 +45,7 @@ jobs:
           GITHUB_OWNER: PwannMalin
           GITHUB_REPO: rental-mcp
           GITHUB_BASE_BRANCH: main
-          NOTIFY_INCLUDE_HIGH_LOGIC: "false"
+          NOTIFY_INCLUDE_HIGH_LOGIC: "true"
           CRITIC_BATCH_LIMIT: "30"
         run: |
           set -e
