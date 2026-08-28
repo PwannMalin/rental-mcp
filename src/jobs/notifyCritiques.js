@@ -1,35 +1,12 @@
 import "dotenv/config";
-import fs from "fs/promises";
-import path from "path";
 import { createRegistry } from "../logic/toolBootstrap.js";
-import { logCritique } from "../agent/critiqueStore.js";
-
-const CRITIQUE_LOG = path.resolve("logs/critiques.jsonl");
-
-async function readJsonl(filePath) {
-  try {
-    const text = await fs.readFile(filePath, "utf8");
-    return text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  } catch (err) {
-    if (err.code === "ENOENT") return [];
-    throw err;
-  }
-}
+import {
+  logCritique,
+  readOpenCritiques,
+  markCritique,
+} from "../agent/critiqueStore.js";
 
 function shouldNotify(row) {
-    // TEST ONLY
-
   if (!row?.critique || row.critique.error) return false;
   if (row.status === "emailed" || row.status === "dismissed") return false;
 
@@ -60,7 +37,7 @@ function buildEmailBody(row) {
     `Status: ${row.status}`,
     `Fingerprint: ${row.fingerprint || "n/a"}`,
     `ChatId: ${row.chatId || "n/a"}`,
-    `When: ${row.at || ""}`,
+    `When: ${row.ts || row.at || ""}`,
     ``,
     `User said:`,
     row.userInput || "",
@@ -98,10 +75,9 @@ async function main() {
     throw new Error("NOTIFY_EMAIL_TO is not set");
   }
 
-  const rows = await readJsonl(CRITIQUE_LOG);
+  const rows = await readOpenCritiques();
   const pending = rows.filter(shouldNotify);
 
-  // Dedupe by fingerprint within this run (same bug, many chats)
   const seenFp = new Set();
   const unique = [];
   for (const row of pending) {
@@ -138,7 +114,6 @@ async function main() {
     const body = buildEmailBody(row);
 
     try {
-      // Adjust args to match your email.send tool schema if different
       await registry.execute("email.send", {
         to,
         subject,
@@ -147,7 +122,11 @@ async function main() {
         from: process.env.NOTIFY_EMAIL_FROM || undefined,
       });
 
-      // Append a marker row so we don't email this fingerprint again
+      await markCritique(row.id, {
+        status: "emailed",
+        notifyTo: to,
+      });
+
       await logCritique({
         chatId: row.chatId,
         source: row.source,
