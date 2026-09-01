@@ -698,26 +698,43 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           "Checking which customers have open rental requests… this may take a moment."
         );
 
-        const toCheck = state.allCustomers.slice(0, 60);
+        const pageSize = 25;
+        const maxPages = 4; // check up to 100 customers
         const enriched = [];
+        let checkedCount = 0;
 
-        for (const customer of toCheck) {
-          try {
-            const rentalResult = await this.registry.execute(
-              "search.execute",
-              {
-                type: "RENTAL",
-                filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                topCount: 20,
-              },
-              context
-            );
-            const count = this.getRowsFromToolResult(rentalResult).length;
-            if (count > 0) {
-              enriched.push({ ...customer, requestCount: count });
+        for (let page = 0; page < maxPages; page++) {
+          const start = page * pageSize;
+          const pageCustomers = state.allCustomers.slice(start, start + pageSize);
+          if (pageCustomers.length === 0) break;
+
+          await ui.update(`Checking customers ${start + 1} to ${start + pageCustomers.length} for open rental requests...`);
+
+          for (const customer of pageCustomers) {
+            try {
+              const rentalResult = await this.registry.execute(
+                "search.execute",
+                {
+                  type: "RENTAL",
+                  filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+                  topCount: 20,
+                },
+                context
+              );
+              const count = this.getRowsFromToolResult(rentalResult).length;
+              if (count > 0) {
+                enriched.push({ ...customer, requestCount: count });
+              }
+            } catch {
+              // skip
             }
-          } catch {
-            // skip
+          }
+
+          checkedCount += pageCustomers.length;
+
+          // If found some with requests, stop early
+          if (enriched.length > 0) {
+            break;
           }
         }
 
@@ -727,7 +744,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           return {
             success: true,
             answer:
-              "None of the customers I checked have open rental requests. Would you like to try a different search?",
+              `None of the first ${checkedCount} customers I checked have open rental requests. Would you like to try a different search or narrow your criteria?`,
           };
         }
 
@@ -743,9 +760,12 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         return {
           success: true,
           answer:
-            `Found ${enriched.length} customers with open rental requests:\n\n` +
+            `Found ${enriched.length} customers with open rental requests (checked ${checkedCount} customers):\n\n` +
             lines.join("\n") +
             `\n\nPlease reply with the number or Customer # you want to continue with.`,
+          partialResults: true,
+          checkedCount,
+          totalCustomers: state.allCustomers.length
         };
       }
 
