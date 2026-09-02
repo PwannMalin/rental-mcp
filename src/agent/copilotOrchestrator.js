@@ -1213,9 +1213,11 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                     requestCount: null,
                   }));
 
-                  // Enrich filtered customers with rental request counts
+                  // Enrich filtered customers with rental request counts (only first 25 to limit load)
                   const enriched = [];
-                  for (const customer of filteredCustomers) {
+                  const sampleSize = Math.min(25, filteredCustomers.length);
+                  for (let i = 0; i < sampleSize; i++) {
+                    const customer = filteredCustomers[i];
                     try {
                       const rentalResult = await this.registry.execute(
                         "search.execute",
@@ -1269,7 +1271,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                       await this.saveSessionState(sessionKey);
                       return {
                         success: true,
-                        answer: `No customers matching your search have any active rental requests among the ${filteredCustomers.length} checked.\n\nWould you like to search for something else?`,
+                        answer: `No customers matching your search have any active rental requests among the first ${sampleSize} Amazon customers checked.\n\nWould you like to search for something else or check more? You can say "load more" to check more customers.`,
                       };
                     }
                     if (withRequests.length === 1) {
@@ -1341,9 +1343,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                     return {
                       success: true,
                       answer:
-                        `Found ${withRequests.length} customer(s) with active rental requests:\n\n` +
+                        `Found ${withRequests.length} customer(s) with active rental requests among the first ${sampleSize} Amazon customers checked:\n\n` +
                         lines.join("\n") +
-                        `\n\nPlease reply with the number or Customer # you want to continue with.`,
+                        `\n\nPlease reply with the number or Customer # you want to continue with. You can also say "load more" to check more Amazon customers.`,
                       showPagination: true,
                       awaitingCustomerSelection: true,
                       options: withRequests,
