@@ -932,7 +932,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         "search.execute",
         {
           type: "CUSTOMER",
-          SearchTerm: userInput,
+          filterQuery: `contains(CustomerName,'${userInput.replace(/'/g, "''")}')`,
           topCount: 50
         },
         context
