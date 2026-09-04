@@ -168,133 +168,132 @@ export class CopilotOrchestrator {
       this.activeRequest = null;
     }
   }
- async enrichPageWithRequests(state, context, ui) {
-  const start = state.page * state.pageSize;
-  const pageRows = state.filtered.slice(start, start + state.pageSize);
+  async enrichPageWithRequests(state, context, ui) {
+    const start = state.page * state.pageSize;
+    const pageRows = state.filtered.slice(start, start + state.pageSize);
 
-  await ui.update(
-    `Checking ${pageRows.length} customers on this page for open rental requests…`
-  );
+    await ui.update(
+      `Checking ${pageRows.length} customers on this page for open rental requests…`,
+    );
 
-  const enriched = [];
+    const enriched = [];
 
-  for (const customer of pageRows) {
-    try {
-      const rentalResult = await this.registry.execute(
-        "search.execute",
-        {
-          type: "RENTAL",
-          filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-          topCount: 20
-        },
-        context
-      );
-      const count = this.getRowsFromToolResult(rentalResult).length;
-      enriched.push({ ...customer, requestCount: count });
-    } catch {
-      enriched.push({ ...customer, requestCount: 0 });
+    for (const customer of pageRows) {
+      try {
+        const rentalResult = await this.registry.execute(
+          "search.execute",
+          {
+            type: "RENTAL",
+            filterQuery: `Customer eq '${customer.CustomerNumber}'`,
+            topCount: 20,
+          },
+          context,
+        );
+        const count = this.getRowsFromToolResult(rentalResult).length;
+        enriched.push({ ...customer, requestCount: count });
+      } catch {
+        enriched.push({ ...customer, requestCount: 0 });
+      }
     }
+
+    return enriched;
   }
 
-  return enriched;
-}
+  formatRequestPage(enriched, state) {
+    const withRequests = enriched.filter((c) => c.requestCount > 0);
+    const start = state.page * state.pageSize;
+    const totalPages = Math.ceil(state.filtered.length / state.pageSize);
 
-formatRequestPage(enriched, state) {
-  const withRequests = enriched.filter((c) => c.requestCount > 0);
-  const start = state.page * state.pageSize;
-  const totalPages = Math.ceil(state.filtered.length / state.pageSize);
+    let nav = "";
+    if (totalPages > 1) {
+      const parts = [];
+      if (state.page > 0) parts.push(`Prev ${state.pageSize}`);
+      if (state.page < totalPages - 1) parts.push(`Next ${state.pageSize}`);
+      nav = `\n\n[ ${parts.join("  |  ")} ]  (page ${state.page + 1} of ${totalPages})`;
+    }
 
-  let nav = "";
-  if (totalPages > 1) {
-    const parts = [];
-    if (state.page > 0) parts.push(`Prev ${state.pageSize}`);
-    if (state.page < totalPages - 1) parts.push(`Next ${state.pageSize}`);
-    nav = `\n\n[ ${parts.join("  |  ")} ]  (page ${state.page + 1} of ${totalPages})`;
-  }
+    const footer =
+      `\n\nYou can:\n` +
+      `• Reply with a **branch** (e.g. Houston)\n` +
+      `• Say **"only with open requests"** to scan more at once\n` +
+      `• Or use **Next / Prev** to check another page`;
 
-  const footer =
-    `\n\nYou can:\n` +
-    `• Reply with a **branch** (e.g. Houston)\n` +
-    `• Say **"only with open requests"** to scan more at once\n` +
-    `• Or use **Next / Prev** to check another page`;
+    if (withRequests.length === 0) {
+      return {
+        answer:
+          `Checked customers ${start + 1}–${start + enriched.length}.\n` +
+          `None of them have open rental requests.` +
+          nav +
+          footer,
+        withRequests: [],
+        showPagination: totalPages > 1,
+      };
+    }
 
-  if (withRequests.length === 0) {
+    const lines = withRequests.map((c, i) => {
+      return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
+    });
+
     return {
       answer:
         `Checked customers ${start + 1}–${start + enriched.length}.\n` +
-        `None of them have open rental requests.` +
+        `Found ${withRequests.length} with open rental requests:\n\n` +
+        lines.join("\n") +
         nav +
+        `\n\nReply with the number or Customer # to continue.` +
         footer,
-      withRequests: [],
-      showPagination: totalPages > 1
+      withRequests,
+      showPagination: totalPages > 1,
     };
   }
 
-  const lines = withRequests.map((c, i) => {
-    return `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`;
-  });
+  async tryResolvePendingRequestSelection(userInput, context, ui) {
+    if (!this.pendingRequestSelection?.options?.length) {
+      return null;
+    }
 
-  return {
-    answer:
-      `Checked customers ${start + 1}–${start + enriched.length}.\n` +
-      `Found ${withRequests.length} with open rental requests:\n\n` +
-      lines.join("\n") +
-      nav +
-      `\n\nReply with the number or Customer # to continue.` +
-      footer,
-    withRequests,
-    showPagination: totalPages > 1
-  };
-}
+    const value = this.getCleanValue(userInput).toLowerCase();
 
-async tryResolvePendingRequestSelection(userInput, context, ui) {
-  if (!this.pendingRequestSelection?.options?.length) {
-    return null;
-  }
+    const match = this.pendingRequestSelection.options.find((r, index) => {
+      const requestId = this.getCleanValue(r.RequestID).toLowerCase();
 
-  const value = this.getCleanValue(userInput).toLowerCase();
+      return value === requestId || parseInt(value, 10) === index + 1;
+    });
 
-  const match = this.pendingRequestSelection.options.find((r, index) => {
-    const requestId = this.getCleanValue(r.RequestID).toLowerCase();
+    if (!match) {
+      console.log("No match found for pending request selection:", value);
+      return null;
+    }
 
-    return (
-      value === requestId ||
-      parseInt(value, 10) === index + 1
+    this.activeRequest = {
+      RequestID: match.RequestID,
+      Customer: this.getCleanValue(match.Customer || match.CustomerNumber),
+      CustomerNumber: this.getCleanValue(
+        match.CustomerNumber || match.Customer,
+      ),
+      Branch: this.getCleanValue(match.Branch),
+      RequestStatus: this.getCleanValue(match.RequestStatus || match.Status),
+      ContactName: this.getCleanValue(match.ContactName || match.Contact),
+    };
+
+    this.pendingRequestSelection = null;
+    this.customerSearchState = null;
+
+    console.log(
+      "ACTIVE REQUEST SET FROM SELECTION:",
+      JSON.stringify(this.activeRequest, null, 2),
     );
-  });
 
-  if (!match) {
-    console.log("No match found for pending request selection:", value);
-    return null;
+    await this.saveSessionState(this.getSessionKey(context));
+
+    return {
+      success: true,
+      answer:
+        `Selected RequestID ${this.activeRequest.RequestID}` +
+        `${this.activeRequest.CustomerNumber ? ` for customer ${this.activeRequest.CustomerNumber}` : ""}.\n\n` +
+        `You can say "show request lines", "details", or "equipment requested" for more information.`,
+    };
   }
-
-  this.activeRequest = {
-    RequestID: match.RequestID,
-    Customer: this.getCleanValue(match.Customer || match.CustomerNumber),
-    CustomerNumber: this.getCleanValue(match.CustomerNumber || match.Customer),
-    Branch: this.getCleanValue(match.Branch),
-    RequestStatus: this.getCleanValue(match.RequestStatus || match.Status),
-    ContactName: this.getCleanValue(match.ContactName || match.Contact),
-  };
-
-  this.pendingRequestSelection = null;
-  this.customerSearchState = null;
-
-  console.log(
-    "ACTIVE REQUEST SET FROM SELECTION:",
-    JSON.stringify(this.activeRequest, null, 2)
-  );
-
-  await this.saveSessionState(this.getSessionKey(context));
-
-  return {
-    success: true,
-    answer:
-      `Selected RequestID ${this.activeRequest.RequestID}` +
-      `${this.activeRequest.CustomerNumber ? ` for customer ${this.activeRequest.CustomerNumber}` : ""}.\n\n` +
-      `You can say "show request lines", "details", or "equipment requested" for more information.`,
-  };
-}
 
   async tryResolvePendingCustomerSelection(userInput, context, ui) {
     if (!this.pendingCustomerSelection?.options?.length) {
@@ -519,20 +518,26 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
   async runStreaming(userInput, context = {}, ui) {
     const sessionKey = this.getSessionKey(context);
-   const savedState = (await this.memory?.get?.(sessionKey)) || {};
+    const savedState = (await this.memory?.get?.(sessionKey)) || {};
 
-    this.activeRequest = savedState.activeRequest || this.activeRequest;
+    this.activeRequest = savedState.activeRequest ?? this.activeRequest;
+
     this.pendingRequestSelection =
-      savedState.pendingRequestSelection || this.pendingRequestSelection;
+      savedState.pendingRequestSelection ?? this.pendingRequestSelection;
+
     this.pendingCustomerSelection =
-      savedState.pendingCustomerSelection || this.pendingCustomerSelection;
+      savedState.pendingCustomerSelection ?? this.pendingCustomerSelection;
+
     this.lastAgentQuestion =
-      savedState.lastAgentQuestion || this.lastAgentQuestion;
+      savedState.lastAgentQuestion ?? this.lastAgentQuestion;
+
     this.lastSearchResults =
-      savedState.lastSearchResults || this.lastSearchResults;
-    this.lastSearchType = savedState.lastSearchType || this.lastSearchType;
+      savedState.lastSearchResults ?? this.lastSearchResults;
+
+    this.lastSearchType = savedState.lastSearchType ?? this.lastSearchType;
+
     this.customerSearchState =
-      savedState.customerSearchState || this.customerSearchState;
+      savedState.customerSearchState ?? this.customerSearchState;
 
     const affirmative = [
       "yes",
@@ -558,13 +563,66 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
       "search for",
       "find equipment",
       "lookup equipment",
+      "find customer",
+      "search customer",
     ];
+
+    const isNewSearch = clearKeywords.some((keyword) =>
+      userText.includes(keyword),
+    );
+
+    if (isNewSearch) {
+      this.activeRequest = null;
+      this.pendingRequestSelection = null;
+      this.pendingCustomerSelection = null;
+      this.customerSearchState = null;
+      this.lastAgentQuestion = null;
+
+      await this.saveSessionState(sessionKey);
+    }
+
+    // 1. Customer selection
+    if (!isNewSearch && this.pendingCustomerSelection?.options?.length) {
+      const selectionResult = await this.tryResolvePendingCustomerSelection(
+        userInput,
+        context,
+        ui,
+      );
+
+      if (selectionResult) {
+        return selectionResult;
+      }
+    }
+
+    // 2. Rental request selection
+    if (!isNewSearch && this.pendingRequestSelection?.options?.length) {
+      const requestSelectionResult =
+        await this.tryResolvePendingRequestSelection(userInput, context, ui);
+
+      if (requestSelectionResult) {
+        return requestSelectionResult;
+      }
+    }
+
+    // 3. Actions against the active request
+    if (!isNewSearch && this.activeRequest) {
+      const requestActionResult = await this.tryResolvePendingRequestAction(
+        userInput,
+        context,
+        ui,
+      );
+
+      if (requestActionResult) {
+        await this.saveSessionState(sessionKey);
+        return requestActionResult;
+      }
+    }
     if (clearKeywords.some((k) => userInput.toLowerCase().includes(k))) {
       this.activeRequest = null;
       this.pendingCustomerSelection = null;
       this.customerSearchState = null;
     }
-       // ---------- Handle pagination & narrowing for large customer sets ----------
+    // ---------- Handle pagination & narrowing for large customer sets ----------
     if (this.customerSearchState) {
       const state = this.customerSearchState;
       const text = this.getCleanValue(userInput).toLowerCase();
@@ -578,7 +636,11 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         state.page += 1;
 
         if (state.checkRequests) {
-          const enriched = await this.enrichPageWithRequests(state, context, ui);
+          const enriched = await this.enrichPageWithRequests(
+            state,
+            context,
+            ui,
+          );
           const pageResult = this.formatRequestPage(enriched, state);
           this.pendingCustomerSelection = pageResult.withRequests.length
             ? { options: pageResult.withRequests }
@@ -608,7 +670,11 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         state.page -= 1;
 
         if (state.checkRequests) {
-          const enriched = await this.enrichPageWithRequests(state, context, ui);
+          const enriched = await this.enrichPageWithRequests(
+            state,
+            context,
+            ui,
+          );
           const pageResult = this.formatRequestPage(enriched, state);
           this.pendingCustomerSelection = pageResult.withRequests.length
             ? { options: pageResult.withRequests }
@@ -650,17 +716,17 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
             filterQuery: state.filterQuery,
             topCount: newTop,
           },
-          context
+          context,
         );
 
         const rows = this.getRowsFromToolResult(refetch);
         const allCustomers = rows.map((row) => ({
           CustomerNumber: this.getCleanValue(
-            row.CustomerNumber || row.customerNumber
+            row.CustomerNumber || row.customerNumber,
           ),
           Branch: this.getCleanValue(row.Branch || row.branch),
           customerName: this.getCleanValue(
-            row.CustomerName || row.customerName || row.Name || row.name
+            row.CustomerName || row.customerName || row.Name || row.name,
           ),
           requestCount: null,
         }));
@@ -695,7 +761,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         text.includes("has requests")
       ) {
         await ui.update(
-          "Checking which customers have open rental requests… this may take a moment."
+          "Checking which customers have open rental requests… this may take a moment.",
         );
 
         const pageSize = 25;
@@ -705,10 +771,15 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
         for (let page = 0; page < maxPages; page++) {
           const start = page * pageSize;
-          const pageCustomers = state.allCustomers.slice(start, start + pageSize);
+          const pageCustomers = state.allCustomers.slice(
+            start,
+            start + pageSize,
+          );
           if (pageCustomers.length === 0) break;
 
-          await ui.update(`Checking customers ${start + 1} to ${start + pageCustomers.length} for open rental requests...`);
+          await ui.update(
+            `Checking customers ${start + 1} to ${start + pageCustomers.length} for open rental requests...`,
+          );
 
           for (const customer of pageCustomers) {
             try {
@@ -719,7 +790,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                   filterQuery: `Customer eq '${customer.CustomerNumber}'`,
                   topCount: 20,
                 },
-                context
+                context,
               );
               const count = this.getRowsFromToolResult(rentalResult).length;
               if (count > 0) {
@@ -743,8 +814,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           await this.saveSessionState(sessionKey);
           return {
             success: true,
-            answer:
-              `None of the first ${checkedCount} customers I checked have open rental requests. Would you like to try a different search or narrow your criteria?`,
+            answer: `None of the first ${checkedCount} customers I checked have open rental requests. Would you like to try a different search or narrow your criteria?`,
           };
         }
 
@@ -754,7 +824,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
         const lines = enriched.map(
           (c, i) =>
-            `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`
+            `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`,
         );
 
         return {
@@ -765,7 +835,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
             `\n\nPlease reply with the number or Customer # you want to continue with.`,
           partialResults: true,
           checkedCount,
-          totalCustomers: state.allCustomers.length
+          totalCustomers: state.allCustomers.length,
         };
       }
 
@@ -786,7 +856,10 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         const originalFilter = state.filterQuery || "";
 
         let newFilter = "";
-        if (originalFilter && originalFilter.includes("contains(CustomerName")) {
+        if (
+          originalFilter &&
+          originalFilter.includes("contains(CustomerName")
+        ) {
           newFilter = `(${originalFilter}) and Branch eq '${text.toUpperCase()}'`;
         } else if (originalFilter && originalFilter.length > 0) {
           newFilter = `(${originalFilter}) and Branch eq '${text.toUpperCase()}'`;
@@ -797,7 +870,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         const clientNarrowed = state.allCustomers.filter(
           (c) =>
             c.Branch.toLowerCase().includes(text) ||
-            c.customerName.toLowerCase().includes(text)
+            c.customerName.toLowerCase().includes(text),
         );
 
         if (newFilter) {
@@ -810,7 +883,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
               filterQuery: newFilter,
               topCount: 100,
             },
-            context
+            context,
           );
 
           const rows = this.getRowsFromToolResult(refetch);
@@ -818,14 +891,11 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           if (rows.length > 0) {
             const allCustomers = rows.map((row) => ({
               CustomerNumber: this.getCleanValue(
-                row.CustomerNumber || row.customerNumber
+                row.CustomerNumber || row.customerNumber,
               ),
               Branch: this.getCleanValue(row.Branch || row.branch),
               customerName: this.getCleanValue(
-                row.CustomerName ||
-                  row.customerName ||
-                  row.Name ||
-                  row.name
+                row.CustomerName || row.customerName || row.Name || row.name,
               ),
               requestCount: null,
             }));
@@ -841,10 +911,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                       filterQuery: `Customer eq '${customer.CustomerNumber}'`,
                       topCount: 50,
                     },
-                    context
+                    context,
                   );
-                  const count =
-                    this.getRowsFromToolResult(rentalResult).length;
+                  const count = this.getRowsFromToolResult(rentalResult).length;
                   enriched.push({ ...customer, requestCount: count });
                 } catch {
                   enriched.push({ ...customer, requestCount: 0 });
@@ -860,7 +929,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
               const lines = list.map(
                 (c, i) =>
-                  `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber}${c.requestCount != null ? ` — Requests: ${c.requestCount}` : ""}`
+                  `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber}${c.requestCount != null ? ` — Requests: ${c.requestCount}` : ""}`,
               );
 
               return {
@@ -918,11 +987,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
       }
     } // end if (this.customerSearchState)
 
-   
-
-
-
-      // Check if there is an active customer context (activeRequest with CustomerNumber)
+    // Check if there is an active customer context (activeRequest with CustomerNumber)
     if (!this.activeRequest || !this.activeRequest.CustomerNumber) {
       // No active customer context, initiate customer search flow
       // Use the userInput as search term for CUSTOMER
@@ -933,9 +998,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         {
           type: "CUSTOMER",
           filterQuery: `contains(CustomerName,'${userInput.replace(/'/g, "''")}')`,
-          topCount: 50
+          topCount: 50,
         },
-        context
+        context,
       );
 
       const customerRows = this.getRowsFromToolResult(customerResult);
@@ -944,16 +1009,20 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         await this.saveSessionState(this.getSessionKey(context));
         return {
           success: true,
-          answer: `I couldn't find any customers matching '${userInput}'. Please try a different search term.`
+          answer: `I couldn't find any customers matching '${userInput}'. Please try a different search term.`,
         };
       }
 
       // Normalize customers
-      const customers = customerRows.map(row => ({
-        CustomerNumber: this.getCleanValue(row.CustomerNumber || row.customerNumber),
+      const customers = customerRows.map((row) => ({
+        CustomerNumber: this.getCleanValue(
+          row.CustomerNumber || row.customerNumber,
+        ),
         Branch: this.getCleanValue(row.Branch || row.branch),
-        customerName: this.getCleanValue(row.CustomerName || row.customerName || row.Name || row.name),
-        requestCount: null
+        customerName: this.getCleanValue(
+          row.CustomerName || row.customerName || row.Name || row.name,
+        ),
+        requestCount: null,
       }));
 
       // Enrich customers with rental request counts
@@ -965,9 +1034,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
             {
               type: "RENTAL",
               filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-              topCount: 20
+              topCount: 20,
             },
-            context
+            context,
           );
           const count = this.getRowsFromToolResult(rentalResult).length;
           enriched.push({ ...customer, requestCount: count });
@@ -985,9 +1054,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           {
             type: "RENTAL",
             filterQuery: `Customer eq '${only.CustomerNumber}'`,
-            topCount: 50
+            topCount: 50,
           },
-          context
+          context,
         );
         const rentalRows = this.getRowsFromToolResult(rentalResult);
 
@@ -995,16 +1064,20 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           await this.saveSessionState(this.getSessionKey(context));
           return {
             success: true,
-            answer: `I found customer ${only.CustomerNumber} (${only.Branch || only.customerName}), but there are currently no open rental requests.`
+            answer: `I found customer ${only.CustomerNumber} (${only.Branch || only.customerName}), but there are currently no open rental requests.`,
           };
         }
 
         if (rentalResult?.success) {
-          this.rememberActiveRequest(rentalResult, {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${only.CustomerNumber}'`,
-            topCount: 50
-          }, context);
+          this.rememberActiveRequest(
+            rentalResult,
+            {
+              type: "RENTAL",
+              filterQuery: `Customer eq '${only.CustomerNumber}'`,
+              topCount: 50,
+            },
+            context,
+          );
           this.captureSchema("RENTAL", rentalResult);
         }
 
@@ -1018,21 +1091,23 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
           return {
             success: true,
             answer: `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\nRequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\nYou can say \"show request lines\", \"details\", or \"equipment requested\" for more information.`,
-            showPagination: false
+            showPagination: false,
           };
         }
 
-        const requestList = rentalRows.map((row, index) => {
-          const id = this.getRequestId(row);
-          const status = this.getCleanValue(row.RequestStatus || row.Status);
-          const contact = this.getCleanValue(row.ContactName || row.Contact);
-          return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-        }).join("\n");
+        const requestList = rentalRows
+          .map((row, index) => {
+            const id = this.getRequestId(row);
+            const status = this.getCleanValue(row.RequestStatus || row.Status);
+            const contact = this.getCleanValue(row.ContactName || row.Contact);
+            return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
+          })
+          .join("\n");
 
         return {
           success: true,
           answer: `Found ${rentalRows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n${requestList}\n\nYou can say \"show request lines\" or \"details\" for more information.`,
-          showPagination: true
+          showPagination: true,
         };
       }
 
@@ -1047,7 +1122,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         onlyWithRequests: false,
         hitLimit: enriched.length >= 50,
         currentTopCount: 50,
-        checkRequests: false
+        checkRequests: false,
       };
 
       this.pendingCustomerSelection = { options: enriched };
@@ -1061,7 +1136,7 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
         answer: `Found ${enriched.length} customers matching '${userInput}':\n\n${lines}${nav}\n\nPlease reply with the number or Customer # you want to continue with.`,
         showPagination: true,
         awaitingCustomerSelection: true,
-        options: enriched
+        options: enriched,
       };
     }
 
@@ -1069,15 +1144,18 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
     const selectionResult = await this.tryResolvePendingCustomerSelection(
       userInput,
       context,
-      ui
+      ui,
     );
     if (selectionResult) {
       return selectionResult;
     }
 
     // 2) Request pick (when multiple RequestIDs were listed)
-    const requestSelectionResult =
-      await this.tryResolvePendingRequestSelection(userInput, context, ui);
+    const requestSelectionResult = await this.tryResolvePendingRequestSelection(
+      userInput,
+      context,
+      ui,
+    );
     if (requestSelectionResult) {
       return requestSelectionResult;
     }
@@ -1086,17 +1164,11 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
     const requestActionResult = await this.tryResolvePendingRequestAction(
       userInput,
       context,
-      ui
+      ui,
     );
     if (requestActionResult) {
       return requestActionResult;
     }
-
-   
-
-
-
-    
 
     const { userId, tenantId } = context;
 
@@ -1205,7 +1277,10 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
                 // If the search term includes 'amazon', apply OData filter to find customers with CustomerName containing 'Amazon'
                 let filteredCustomers = [];
-                if (args.SearchTerm && args.SearchTerm.toLowerCase().includes('amazon')) {
+                if (
+                  args.SearchTerm &&
+                  args.SearchTerm.toLowerCase().includes("amazon")
+                ) {
                   // Fetch customers filtered by contains(CustomerName,'Amazon')
                   const amazonResult = await this.registry.execute(
                     "search.execute",
@@ -1214,21 +1289,21 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                       filterQuery: `contains(CustomerName,'Amazon')`,
                       topCount: 500,
                     },
-                    context
+                    context,
                   );
                   const amazonRows = this.getRowsFromToolResult(amazonResult);
 
                   // Normalize amazon customers
                   filteredCustomers = amazonRows.map((row) => ({
                     CustomerNumber: this.getCleanValue(
-                      row.CustomerNumber || row.customerNumber
+                      row.CustomerNumber || row.customerNumber,
                     ),
                     Branch: this.getCleanValue(row.Branch || row.branch),
                     customerName: this.getCleanValue(
                       row.CustomerName ||
                         row.customerName ||
                         row.Name ||
-                        row.name
+                        row.name,
                     ),
                     requestCount: null,
                   }));
@@ -1246,10 +1321,14 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                           filterQuery: `Customer eq '${customer.CustomerNumber}'`,
                           topCount: 50,
                         },
-                        context
+                        context,
                       );
-                      const rentalRows = this.getRowsFromToolResult(rentalResult);
-                      enriched.push({ ...customer, requestCount: rentalRows.length });
+                      const rentalRows =
+                        this.getRowsFromToolResult(rentalResult);
+                      enriched.push({
+                        ...customer,
+                        requestCount: rentalRows.length,
+                      });
                     } catch {
                       enriched.push({ ...customer, requestCount: 0 });
                     }
@@ -1284,7 +1363,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                   }
 
                   if (filteredCustomers.length <= 15) {
-                    const withRequests = filteredCustomers.filter(c => c.requestCount > 0);
+                    const withRequests = filteredCustomers.filter(
+                      (c) => c.requestCount > 0,
+                    );
                     if (withRequests.length === 0) {
                       this.customerSearchState = null;
                       this.pendingCustomerSelection = null;
@@ -1306,9 +1387,10 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                           filterQuery: `Customer eq '${only.CustomerNumber}'`,
                           topCount: 50,
                         },
-                        context
+                        context,
                       );
-                      const rentalRows = this.getRowsFromToolResult(rentalResult);
+                      const rentalRows =
+                        this.getRowsFromToolResult(rentalResult);
                       if (!rentalRows.length) {
                         await this.saveSessionState(sessionKey);
                         return {
@@ -1317,19 +1399,27 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                         };
                       }
                       if (rentalResult?.success) {
-                        this.rememberActiveRequest(rentalResult, {
-                          type: "RENTAL",
-                          filterQuery: `Customer eq '${only.CustomerNumber}'`,
-                          topCount: 50,
-                        }, context);
+                        this.rememberActiveRequest(
+                          rentalResult,
+                          {
+                            type: "RENTAL",
+                            filterQuery: `Customer eq '${only.CustomerNumber}'`,
+                            topCount: 50,
+                          },
+                          context,
+                        );
                         this.captureSchema("RENTAL", rentalResult);
                       }
                       await this.saveSessionState(sessionKey);
                       if (rentalRows.length === 1) {
                         const row = rentalRows[0];
                         const id = this.getRequestId(row);
-                        const status = this.getCleanValue(row.RequestStatus || row.Status);
-                        const contact = this.getCleanValue(row.ContactName || row.Contact);
+                        const status = this.getCleanValue(
+                          row.RequestStatus || row.Status,
+                        );
+                        const contact = this.getCleanValue(
+                          row.ContactName || row.Contact,
+                        );
                         return {
                           success: true,
                           answer:
@@ -1339,12 +1429,18 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                           showPagination: false,
                         };
                       }
-                      const requestList = rentalRows.map((row, index) => {
-                        const id = this.getRequestId(row);
-                        const status = this.getCleanValue(row.RequestStatus || row.Status);
-                        const contact = this.getCleanValue(row.ContactName || row.Contact);
-                        return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-                      }).join("\n");
+                      const requestList = rentalRows
+                        .map((row, index) => {
+                          const id = this.getRequestId(row);
+                          const status = this.getCleanValue(
+                            row.RequestStatus || row.Status,
+                          );
+                          const contact = this.getCleanValue(
+                            row.ContactName || row.Contact,
+                          );
+                          return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
+                        })
+                        .join("\n");
                       return {
                         success: true,
                         answer:
@@ -1357,8 +1453,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                     this.pendingCustomerSelection = { options: withRequests };
                     this.customerSearchState = null;
                     await this.saveSessionState(sessionKey);
-                    const lines = withRequests.map((c, i) =>
-                      `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`
+                    const lines = withRequests.map(
+                      (c, i) =>
+                        `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`,
                     );
                     return {
                       success: true,
@@ -1374,7 +1471,9 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
 
                   // For larger sets, paginate filtered customers
                   const hitLimit = filteredCustomers.length >= 500;
-                  const pageFmt = this.formatCustomerPage(this.customerSearchState);
+                  const pageFmt = this.formatCustomerPage(
+                    this.customerSearchState,
+                  );
                   await this.saveSessionState(sessionKey);
                   let extraHint = "";
                   if (hitLimit) {
@@ -1511,8 +1610,8 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                           success: true,
                           answer:
                             `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
-`RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
-`You can say "show request lines", "details", or "equipment requested" for more information.`,
+                            `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
+                            `You can say "show request lines", "details", or "equipment requested" for more information.`,
                           showPagination: false,
                         };
                       }
@@ -1562,88 +1661,87 @@ async tryResolvePendingRequestSelection(userInput, context, ui) {
                     };
                   }
 
-                   // ---------- LARGE RESULT SET (> 15) ----------
-                const hitLimit = allCustomers.length >= 100;
-                const wantsRequests =
-                  /request/i.test(userInput) || /rental/i.test(userInput);
+                  // ---------- LARGE RESULT SET (> 15) ----------
+                  const hitLimit = allCustomers.length >= 100;
+                  const wantsRequests =
+                    /request/i.test(userInput) || /rental/i.test(userInput);
 
-                this.customerSearchState = {
-                  allCustomers,
-                  filtered: allCustomers,
-                  page: 0,
-                  pageSize: 25,
-                  searchTerm: args.SearchTerm || "",
-                  filterQuery:
-                    args.filterQuery ||
-                    (args.SearchTerm
-                      ? `contains(CustomerName,'${String(args.SearchTerm).replace(/'/g, "''")}')`
-                      : ""),
-                  onlyWithRequests: false,
-                  hitLimit,
-                  currentTopCount: args.topCount || 100,
-                  checkRequests: wantsRequests,
-                };
+                  this.customerSearchState = {
+                    allCustomers,
+                    filtered: allCustomers,
+                    page: 0,
+                    pageSize: 25,
+                    searchTerm: args.SearchTerm || "",
+                    filterQuery:
+                      args.filterQuery ||
+                      (args.SearchTerm
+                        ? `contains(CustomerName,'${String(args.SearchTerm).replace(/'/g, "''")}')`
+                        : ""),
+                    onlyWithRequests: false,
+                    hitLimit,
+                    currentTopCount: args.topCount || 100,
+                    checkRequests: wantsRequests,
+                  };
 
-                this.pendingCustomerSelection = null;
+                  this.pendingCustomerSelection = null;
 
-                if (wantsRequests) {
-                  const enriched = await this.enrichPageWithRequests(
-                    this.customerSearchState,
-                    context,
-                    ui
-                  );
-                  const pageResult = this.formatRequestPage(
-                    enriched,
-                    this.customerSearchState
-                  );
+                  if (wantsRequests) {
+                    const enriched = await this.enrichPageWithRequests(
+                      this.customerSearchState,
+                      context,
+                      ui,
+                    );
+                    const pageResult = this.formatRequestPage(
+                      enriched,
+                      this.customerSearchState,
+                    );
 
-                  if (pageResult.withRequests.length > 0) {
-                    this.pendingCustomerSelection = {
-                      options: pageResult.withRequests,
+                    if (pageResult.withRequests.length > 0) {
+                      this.pendingCustomerSelection = {
+                        options: pageResult.withRequests,
+                      };
+                    }
+
+                    await this.saveSessionState(sessionKey);
+
+                    return {
+                      success: true,
+                      answer: pageResult.answer,
+                      showPagination: pageResult.showPagination,
                     };
                   }
 
+                  const pageFmt = this.formatCustomerPage(
+                    this.customerSearchState,
+                  );
                   await this.saveSessionState(sessionKey);
+
+                  let extraHint = "";
+                  if (hitLimit) {
+                    extraHint =
+                      `\n\n⚠️  I only retrieved the first 100 matches. There are likely more.\n` +
+                      `• Say **"load more"** (or "show 250") to fetch a larger set\n` +
+                      `• Or narrow by branch / name / "only with open requests"`;
+                  }
 
                   return {
                     success: true,
-                    answer: pageResult.answer,
-                    showPagination: pageResult.showPagination,
+                    answer:
+                      `I found ${allCustomers.length} customers matching your search.\n\n` +
+                      `Showing first ${Math.min(pageSize, allCustomers.length)}:\n\n` +
+                      pageFmt.lines +
+                      pageFmt.nav +
+                      `\n\nThis is a large result set. You can:\n` +
+                      `• Reply with a **branch** name (e.g. "Houston")\n` +
+                      `• Give a more specific name (e.g. "Amazon Logistics")\n` +
+                      `• Say **"only with open requests"** and I'll check a larger sample\n` +
+                      `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
+                      extraHint,
+                    awaitingCustomerSelection: false,
+                    showPagination: true,
                   };
                 }
-
-                const pageFmt = this.formatCustomerPage(
-                  this.customerSearchState
-                );
-                await this.saveSessionState(sessionKey);
-
-                let extraHint = "";
-                if (hitLimit) {
-                  extraHint =
-                    `\n\n⚠️  I only retrieved the first 100 matches. There are likely more.\n` +
-                    `• Say **"load more"** (or "show 250") to fetch a larger set\n` +
-                    `• Or narrow by branch / name / "only with open requests"`;
-                }
-
-                return {
-                  success: true,
-                  answer:
-                    `I found ${allCustomers.length} customers matching your search.\n\n` +
-                    `Showing first ${Math.min(pageSize, allCustomers.length)}:\n\n` +
-                    pageFmt.lines +
-                    pageFmt.nav +
-                    `\n\nThis is a large result set. You can:\n` +
-                    `• Reply with a **branch** name (e.g. "Houston")\n` +
-                    `• Give a more specific name (e.g. "Amazon Logistics")\n` +
-                    `• Say **"only with open requests"** and I'll check a larger sample\n` +
-                    `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
-                    extraHint,
-                  awaitingCustomerSelection: false,
-                  showPagination: true,
-                };
               }
-
-            
 
               // Remember active rental request
               const looksLikeRentalResult =
