@@ -1,3 +1,5 @@
+import { applyDateFilter, currentTimePromptBlock } from "./dateFilters.js";
+
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
     this.registry = registry;
@@ -1248,7 +1250,9 @@ export class CopilotOrchestrator {
             try {
               console.log("Calling tool:", toolName);
               console.log("Arguments:", args);
-
+              if (toolName === "search.execute") {
+                args = applyDateFilter(userInput, args);
+              }
               result = await this.registry.execute(toolName, args, context);
 
               if (result?.success) {
@@ -1863,7 +1867,7 @@ export class CopilotOrchestrator {
         role: "system",
         content: `
 You are a helpful internal Rental Assistant.
-
+${currentTimePromptBlock()}
 ### Critical Tool Rules
 - Always include the "type" parameter when calling search.execute.
 - Valid types: CUSTOMER, RENTAL, REQUEST_LINES, EQUIPMENT
