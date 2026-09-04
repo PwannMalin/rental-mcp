@@ -19,27 +19,9 @@ const REPO = process.env.GITHUB_REPO || "rental-mcp";
 const BASE = process.env.GITHUB_BASE_BRANCH || "main";
 
 const ALLOW_PREFIXES = ["src/agent/", "src/jobs/", "src/llm/"];
-
-async function readJsonl(filePath) {
-  try {
-    const text = await fs.readFile(filePath, "utf8");
-    return text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  } catch (err) {
-    if (err.code === "ENOENT") return [];
-    throw err;
-  }
-}
+const FILE_ALIASES = {
+  "src/agent/customerSearch.js": "src/agent/copilotOrchestrator.js",
+};
 
 function parseArgs(argv) {
   const out = {};
@@ -61,7 +43,9 @@ function applyReplacements(content, replacements) {
       throw new Error(`old string not found:\n${oldStr.slice(0, 200)}`);
     }
     if (count > 1) {
-      throw new Error(`old string not unique (${count} times):\n${oldStr.slice(0, 200)}`);
+      throw new Error(
+        `old string not unique (${count} times):\n${oldStr.slice(0, 200)}`,
+      );
     }
     next = next.replace(oldStr, newStr);
   }
@@ -78,7 +62,7 @@ function pickCritique(rows, fingerprint) {
     (r) =>
       r.status === "open" &&
       (r.action === "logic" || r.action === "prompt") &&
-      r.critique?.needsCodeChange === true
+      r.critique?.needsCodeChange === true,
   );
 
   if (fingerprint) {
@@ -92,27 +76,29 @@ function pickCritique(rows, fingerprint) {
   // Prefer high severity
   open.sort((a, b) => {
     const rank = { high: 0, medium: 1, low: 2 };
-    return (rank[a.critique?.severity] ?? 9) - (rank[b.critique?.severity] ?? 9);
+    return (
+      (rank[a.critique?.severity] ?? 9) - (rank[b.critique?.severity] ?? 9)
+    );
   });
   return open[0] || null;
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-    const rows = await readAllCritiques();
+  const rows = await readAllCritiques();
   const openRows = await readOpenCritiques();
 
   // Skip fingerprints that already have a PR marker
-    const prOpened = new Set(
+  const prOpened = new Set(
     rows
       .filter((r) => r.status === "pr_opened" || r.status === "pr-opened")
       .map((r) => r.fingerprint)
-      .filter(Boolean)
+      .filter(Boolean),
   );
 
   let row = pickCritique(
     openRows.filter((r) => !prOpened.has(r.fingerprint)),
-    args.fingerprint
+    args.fingerprint,
   );
 
   if (!row) {
@@ -121,7 +107,7 @@ async function main() {
   }
 
   console.log(
-    `Architect: fp=${row.fingerprint} action=${row.action} severity=${row.critique?.severity}`
+    `Architect: fp=${row.fingerprint} action=${row.action} severity=${row.critique?.severity}`,
   );
 
   const llm = createAzureOpenAI();
@@ -158,15 +144,16 @@ async function main() {
     return;
   }
 
-  const files = (plan.files || []).filter((f) => isAllowedPath(f.path));
+  const files = (plan.files || [])
+    .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
+    .filter((f) => isAllowedPath(f.path));
+
   if (!files.length) {
-    console.log("No allowlisted files in plan — aborting PR");
-    process.exit(1);
+    console.log("No allowlisted files in plan — docs PR only");
   }
 
   const branchName =
-    plan.branchName ||
-    `fix/critic-${String(row.fingerprint).slice(0, 10)}`;
+    plan.branchName || `fix/critic-${String(row.fingerprint).slice(0, 10)}`;
 
   const { registry } = createRegistry({});
 
@@ -182,65 +169,65 @@ async function main() {
   });
 
   const branchResult = await registry.execute("github.createBranch", {
-  owner: OWNER,
-  repo: REPO,
-  branch: branchName,      // now accepted
-  branchName: branchName,  // also fine
-  baseBranch: BASE,
-  from: BASE,
-});
-console.log("createBranch result:", JSON.stringify(branchResult, null, 2));
-if (!branchResult?.success) {
-  throw new Error(branchResult?.error || "createBranch failed");
-}
-const FILE_ALIASES = {
-  "src/agent/customerSearch.js": "src/agent/copilotOrchestrator.js",
-};
-
-const filesToPatch = (plan.files || [])
-  .map((f) => ({
-    ...f,
-    path: FILE_ALIASES[f.path] || f.path,
-  }))
-  .filter((f) => isAllowedPath(f.path));
-
-const patchedPaths = [];
-
-for (const fileSpec of filesToPatch) {
-  const pathName = fileSpec.path;
-
-  console.log(`Fetching ${pathName} from ${BASE}...`);
-  const fileResult = await registry.execute("github.getFile", {
     owner: OWNER,
     repo: REPO,
-    path: pathName,
-    branch: BASE,
+    branch: branchName, // now accepted
+    branchName: branchName, // also fine
+    baseBranch: BASE,
+    from: BASE,
   });
-
-  const fileData = fileResult?.data || fileResult;
-  const original = fileData?.content;
-
-  if (fileResult?.success === false || !original || typeof original !== "string") {
-    console.warn(
-      `Skip missing file ${pathName}: ${fileResult?.error || "no content"}`
-    );
-    continue;
+  console.log("createBranch result:", JSON.stringify(branchResult, null, 2));
+  if (!branchResult?.success) {
+    throw new Error(branchResult?.error || "createBranch failed");
   }
 
-  const patchUser = {
-    path: pathName,
-    instruction: fileSpec.instruction,
-    criticSummary: row.critique?.summary,
-    requiredFixes: row.critique?.requiredFixes,
-    source:
-      original.length > 180000
-        ? original.slice(0, 180000) + "\n\n/* TRUNCATED */"
-        : original,
-  };
+  const filesToPatch = (plan.files || [])
+    .map((f) => ({
+      ...f,
+      path: FILE_ALIASES[f.path] || f.path,
+    }))
+    .filter((f) => isAllowedPath(f.path));
+
+  const patchedPaths = [];
+
+  for (const fileSpec of filesToPatch) {
+    const pathName = fileSpec.path;
+
+    console.log(`Fetching ${pathName} from ${BASE}...`);
+    const fileResult = await registry.execute("github.getFile", {
+      owner: OWNER,
+      repo: REPO,
+      path: pathName,
+      branch: BASE,
+    });
+
+    const fileData = fileResult?.data || fileResult;
+    const original = fileData?.content;
+
+    if (
+      fileResult?.success === false ||
+      !original ||
+      typeof original !== "string"
+    ) {
+      console.warn(
+        `Skip missing file ${pathName}: ${fileResult?.error || "no content"}`,
+      );
+      continue;
+    }
+
+    const patchUser = {
+      path: pathName,
+      instruction: fileSpec.instruction,
+      criticSummary: row.critique?.summary,
+      requiredFixes: row.critique?.requiredFixes,
+      source:
+        original.length > 180000
+          ? original.slice(0, 180000) + "\n\n/* TRUNCATED */"
+          : original,
+    };
 
     // If file is huge, only send relevant slices to the model (optional optimization).
     // For v1, send full file if under ~200k chars; else send instruction + key sections.
-    
 
     console.log(`Asking model for patches on ${pathName}...`);
     const patchRaw = await runAgent({
@@ -251,7 +238,7 @@ for (const fileSpec of filesToPatch) {
       maxTokens: 8000,
     });
 
-        let patchPlan;
+    let patchPlan;
     try {
       patchPlan = parseJsonFromAgent(patchRaw.content);
     } catch (err) {
@@ -260,7 +247,18 @@ for (const fileSpec of filesToPatch) {
       continue;
     }
 
-        console.log(`Applying ${patchPlan.replacements.length} replacement(s)...`);
+    const replacements = patchPlan.replacements || [];
+    const tooBig = replacements.some(
+      (r) =>
+        String(r.old || "").length > 800 || String(r.new || "").length > 1200,
+    );
+
+    if (!replacements.length || tooBig) {
+      console.warn(`Skip patch for ${pathName}: empty or too large`);
+      continue;
+    }
+
+    console.log(`Applying ${patchPlan.replacements.length} replacement(s)...`);
     let updated;
     try {
       updated = applyReplacements(original, patchPlan.replacements);
@@ -269,9 +267,14 @@ for (const fileSpec of filesToPatch) {
       continue;
     }
 
+    if (Math.abs(updated.length - original.length) > original.length * 0.2) {
+      console.warn(`Skip oversized rewrite for ${pathName}`);
+      continue;
+    }
+
     if (updated === original) {
       console.warn(
-        `Patch produced no content change for ${pathName}; continuing with plan-only PR`
+        `Patch produced no content change for ${pathName}; continuing with plan-only PR`,
       );
       continue;
     }
@@ -282,13 +285,18 @@ for (const fileSpec of filesToPatch) {
       branch: branchName,
       path: pathName,
       content: updated,
-      message: `fix: ${plan.prTitle || row.critique?.summary || row.fingerprint}`.slice(0, 72),
+      message:
+        `fix: ${plan.prTitle || row.critique?.summary || row.fingerprint}`.slice(
+          0,
+          72,
+        ),
     });
     // ... check success ...
     patchedPaths.push(pathName);
 
     console.log("updateFile result:", JSON.stringify(updateResult, null, 2));
-    const ok = updateResult?.success !== false && (updateResult?.data?.success !== false);
+    const ok =
+      updateResult?.success !== false && updateResult?.data?.success !== false;
     if (!ok) {
       throw new Error(updateResult?.error || "updateFile failed");
     }
@@ -332,9 +340,11 @@ for (const fileSpec of filesToPatch) {
   } catch (err) {
     console.warn(
       "github.updateFile failed (tool args may differ):",
-      err.message
+      err.message,
     );
-    console.warn("Branch may still exist; create the plan file manually if needed.");
+    console.warn(
+      "Branch may still exist; create the plan file manually if needed.",
+    );
   }
 
   // 3) Create DRAFT pull request
@@ -355,17 +365,13 @@ for (const fileSpec of filesToPatch) {
     ...(row.critique?.acceptanceCriteria || []).map((i) => `- ${i}`),
     ``,
     ...(patchedPaths.length
-  ? [
-      `### Code changes`,
-      ...patchedPaths.map((p) => `- Patched \`${p}\``),
-      `- Review the diff carefully before merge`,
-      ``,
-    ]
-  : [
-      `### Code changes`,
-      `- No source patch applied (plan/docs only)`,
-      ``,
-    ]),
+      ? [
+          `### Code changes`,
+          ...patchedPaths.map((p) => `- Patched \`${p}\``),
+          `- Review the diff carefully before merge`,
+          ``,
+        ]
+      : [`### Code changes`, `- No source patch applied (plan/docs only)`, ``]),
     `> Draft PR from Architect job. Review carefully before merge.`,
   ].join("\n");
 
