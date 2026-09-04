@@ -1171,7 +1171,10 @@ export class CopilotOrchestrator {
                   this.captureSchema(type, result);
                 }
               }
-
+              const searchTerm = String(args.SearchTerm || userInput || "")
+                .replace(/['"]/g, "")
+                .trim();
+              const safeTerm = searchTerm.replace(/'/g, "''");
               const normalizedType = String(args?.type || "").toUpperCase();
               const rows = this.getRowsFromToolResult(result);
 
@@ -1200,7 +1203,9 @@ export class CopilotOrchestrator {
                     "search.execute",
                     {
                       type: "CUSTOMER",
-                      filterQuery: `contains(CustomerName,'Amazon')`,
+                      filterQuery: searchTerm
+                        ? `contains(CustomerName,'${safeTerm}')`
+                        : args.filterQuery,
                       topCount: 500,
                     },
                     context,
@@ -1257,7 +1262,9 @@ export class CopilotOrchestrator {
                     page: 0,
                     pageSize: pageSize,
                     searchTerm: args.SearchTerm || "",
-                    filterQuery: `contains(CustomerName,'Amazon')`,
+                    filterQuery: searchTerm
+                      ? `contains(CustomerName,'${safeTerm}')`
+                      : args.filterQuery,
                     onlyWithRequests: false,
                     hitLimit: filteredCustomers.length >= 500,
                     currentTopCount: 500,
@@ -1272,7 +1279,7 @@ export class CopilotOrchestrator {
                     await this.saveSessionState(sessionKey);
                     return {
                       success: true,
-                      answer: `No customers with name containing 'Amazon' were found. Would you like to try a different search?`,
+                      answer: `No customers with name containing ${searchTerm}' were found. Would you like to try a different search?`,
                     };
                   }
 
@@ -1286,7 +1293,7 @@ export class CopilotOrchestrator {
                       await this.saveSessionState(sessionKey);
                       return {
                         success: true,
-                        answer: `No customers matching your search have any active rental requests among the first ${sampleSize} Amazon customers checked.\n\nWould you like to search for something else or check more? You can say "load more" to check more customers.`,
+                        answer: `No customers matching your search have any active rental requests among the first ${sampleSize} ${searchTerm}' customers checked.\n\nWould you like to search for something else or check more? You can say "load more" to check more customers.`,
                       };
                     }
                     if (withRequests.length === 1) {
@@ -1374,9 +1381,9 @@ export class CopilotOrchestrator {
                     return {
                       success: true,
                       answer:
-                        `Found ${withRequests.length} customer(s) with active rental requests among the first ${sampleSize} Amazon customers checked:\n\n` +
+                        `Found ${withRequests.length} customer(s) with active rental requests among the first ${sampleSize} ${searchTerm} customers checked:\n\n` +
                         lines.join("\n") +
-                        `\n\nPlease reply with the number or Customer # you want to continue with. You can also say "load more" to check more Amazon customers.`,
+                        `\n\nPlease reply with the number or Customer # you want to continue with. You can also say "load more" to check more ${searchTerm} customers.`,
                       showPagination: true,
                       awaitingCustomerSelection: true,
                       options: withRequests,
@@ -1399,13 +1406,13 @@ export class CopilotOrchestrator {
                   return {
                     success: true,
                     answer:
-                      `I found ${filteredCustomers.length} customers matching your search with name containing 'Amazon'.\n\n` +
+                      `I found ${filteredCustomers.length} customers matching your search with name containing '${searchTerm}'.\n\n` +
                       `Showing first ${Math.min(pageSize, filteredCustomers.length)}:\n\n` +
                       pageFmt.lines +
                       pageFmt.nav +
                       `\n\nThis is a large result set. You can:\n` +
                       `• Reply with a **branch** name (e.g. "Houston")\n` +
-                      `• Give a more specific name (e.g. "Amazon Logistics")\n` +
+                      `• Give a more specific name (e.g. "${searchTerm} Logistics")\n` +
                       `• Say **"only with open requests"** and I'll check a larger sample\n` +
                       `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
                       extraHint,
