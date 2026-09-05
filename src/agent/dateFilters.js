@@ -49,7 +49,7 @@ export function applyDateFilter(userInput, args = {}) {
   const type = String(next.type || "").toUpperCase();
   if (type !== "RENTAL") return next;
 
-  const field = "CreatedOn";
+  const field = "RequestedOn";
   const dateClause = `${field} ge ${range.ge} and ${field} lt ${range.lt}`;
 
   if (next.filterQuery && /2023|2024/.test(next.filterQuery)) {
@@ -61,7 +61,7 @@ export function applyDateFilter(userInput, args = {}) {
 
   if (!next.filterQuery) {
     next.filterQuery = dateClause;
-  } else if (!/CreatedOn|createdon|RequestDate/i.test(next.filterQuery)) {
+  } else if (!/RequestedOn|createdon|RequestDate/i.test(next.filterQuery)) {
     next.filterQuery = `(${next.filterQuery}) and ${dateClause}`;
   }
 
