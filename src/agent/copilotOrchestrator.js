@@ -192,6 +192,35 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
+
+    const looksLikeGlobalRequestQuery =
+      /request/.test(userText) &&
+      /this year|past month|past quarter|today|how many|all/.test(userText);
+
+    if (looksLikeGlobalRequestQuery) {
+      const year = new Date().getFullYear();
+      const filterQuery = `RequestedOn ge ${year}-01-01T00:00:00Z`;
+      await ui.update(`Searching rental requests from ${year}-01-01 to today…`);
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        { type: "RENTAL", filterQuery, topCount: 50 },
+        context,
+      );
+      const rows = this.getRowsFromToolResult(rentalResult);
+      return {
+        success: true,
+        answer: rows.length
+          ? `Found ${rows.length} rental request(s) so far this year (showing up to 50).`
+          : `No rental requests found from ${year}-01-01 through today. I searched RequestHeader by RequestedOn.`,
+      };
+    }
+
+    if (
+      looksLikeCustomerSearch(userText) &&
+      (!this.activeRequest || !this.activeRequest.CustomerNumber)
+    ) {
+      return searchCustomersFromText(this, userInput, context, ui);
+    }
     if (
       /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
         userText,
@@ -650,15 +679,6 @@ export class CopilotOrchestrator {
         }
       }
     } // end if (this.customerSearchState)
-    const looksLikeCustomerSearch =
-      /customer|find |look up|lookup|search for/.test(userText) &&
-      !/request|this year|past month|past quarter|today|how many/.test(
-        userText,
-      );
-
-    const looksLikeGlobalRequestQuery =
-      /request/.test(userText) &&
-      /this year|past month|past quarter|today|how many|all/.test(userText);
 
     if (looksLikeGlobalRequestQuery) {
       const range = {
@@ -673,7 +693,7 @@ export class CopilotOrchestrator {
         "search.execute",
         {
           type: "RENTAL",
-          filterQuery: `CreatedOn ge ${range.ge} and CreatedOn lt ${range.lt}`,
+          filterQuery: `RequestedOn ge ${range.ge} and RequestedOn lt ${range.lt}`,
           topCount: 50,
         },
         context,
