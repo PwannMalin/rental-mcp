@@ -3,11 +3,7 @@ import {
   applyDateFilter,
   currentTimePromptBlock,
 } from "./dateFilters.js";
-import {
-  formatCustomerPage,
-  enrichPageWithRequests,
-  formatRequestPage,
-} from "./customerPaging.js";
+
 import { tryResolvePendingCustomerSelection } from "./customerSelection.js";
 import {
   getRequestId,
