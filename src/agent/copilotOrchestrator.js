@@ -4,6 +4,12 @@ import {
   enrichPageWithRequests,
   formatRequestPage,
 } from "./customerPaging.js";
+
+import {
+  getRequestId,
+  rememberActiveRequest,
+  formatRequestLinesAnswer,
+} from "./requestFlow.js";
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
     this.registry = registry;
@@ -88,9 +94,15 @@ export class CopilotOrchestrator {
   }
 
   getRequestId(row = {}) {
-    return (
-      row.RequestID || row.RequestId || row.requestID || row.requestId || null
-    );
+    return getRequestId(row);
+  }
+
+  rememberActiveRequest(result, args, context) {
+    rememberActiveRequest(this, result);
+  }
+
+  formatRequestLinesAnswer(rows, userText = "") {
+    return formatRequestLinesAnswer(this, rows, userText);
   }
 
   captureSchema(type, result) {
