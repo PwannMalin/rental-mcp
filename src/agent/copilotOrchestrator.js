@@ -628,9 +628,48 @@ export class CopilotOrchestrator {
         }
       }
     } // end if (this.customerSearchState)
+    const looksLikeCustomerSearch =
+      /customer|find |look up|lookup|search for/.test(userText) &&
+      !/request|this year|past month|past quarter|today|how many/.test(
+        userText,
+      );
 
+    const looksLikeGlobalRequestQuery =
+      /request/.test(userText) &&
+      /this year|past month|past quarter|today|how many|all/.test(userText);
+
+    if (looksLikeGlobalRequestQuery) {
+      const range = {
+        ge: `${new Date().getFullYear()}-01-01T00:00:00Z`,
+        lt: new Date().toISOString(),
+      };
+      await ui.update(
+        `Searching rental requests from ${range.ge.slice(0, 10)} to today…`,
+      );
+
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `CreatedOn ge ${range.ge} and CreatedOn lt ${range.lt}`,
+          topCount: 50,
+        },
+        context,
+      );
+
+      const rows = this.getRowsFromToolResult(rentalResult);
+      return {
+        success: true,
+        answer: rows.length
+          ? `Found ${rows.length} rental request(s) so far this year (showing up to 50).`
+          : `No rental requests found from ${range.ge.slice(0, 10)} through today. I searched the request table by date, not by customer.`,
+      };
+    }
     // Check if there is an active customer context (activeRequest with CustomerNumber)
-    if (!this.activeRequest || !this.activeRequest.CustomerNumber) {
+    if (
+      looksLikeCustomerSearch &&
+      (!this.activeRequest || !this.activeRequest.CustomerNumber)
+    ) {
       // No active customer context, initiate customer search flow
       // Use the userInput as search term for CUSTOMER
       await ui.update(`Searching for customers matching your input...`);
