@@ -104,3 +104,64 @@ export function formatRequestPage(enriched, state) {
     showPagination: totalPages > 1,
   };
 }
+
+export async function handleCustomerSearchNav(
+  orchestrator,
+  userInput,
+  context,
+  ui,
+) {
+  const state = orchestrator.customerSearchState;
+  if (!state) return null;
+
+  const sessionKey = orchestrator.getSessionKey(context);
+  const text = orchestrator.getCleanValue(userInput).toLowerCase();
+
+  if (text.includes("next")) {
+    const maxPage = Math.ceil(state.filtered.length / state.pageSize) - 1;
+    if (state.page >= maxPage) {
+      return { success: true, answer: "You're already on the last page." };
+    }
+    state.page += 1;
+    if (state.checkRequests) {
+      const enriched = await orchestrator.enrichPageWithRequests(
+        state,
+        context,
+        ui,
+      );
+      const pageResult = orchestrator.formatRequestPage(enriched, state);
+      orchestrator.pendingCustomerSelection = pageResult.withRequests.length
+        ? { options: pageResult.withRequests }
+        : null;
+      await orchestrator.saveSessionState(sessionKey);
+      return {
+        success: true,
+        answer: pageResult.answer,
+        showPagination: pageResult.showPagination,
+      };
+    }
+    const { lines, nav } = orchestrator.formatCustomerPage(state);
+    await orchestrator.saveSessionState(sessionKey);
+    return {
+      success: true,
+      answer: `Page ${state.page + 1}:\n\n${lines}${nav}`,
+      showPagination: true,
+    };
+  }
+
+  if (text.includes("prev") || text.includes("previous")) {
+    if (state.page <= 0) {
+      return { success: true, answer: "You're already on the first page." };
+    }
+    state.page -= 1;
+    const { lines, nav } = orchestrator.formatCustomerPage(state);
+    await orchestrator.saveSessionState(sessionKey);
+    return {
+      success: true,
+      answer: `Page ${state.page + 1}:\n\n${lines}${nav}`,
+      showPagination: true,
+    };
+  }
+
+  return null;
+}

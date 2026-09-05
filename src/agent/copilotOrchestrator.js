@@ -18,6 +18,13 @@ import {
 } from "./requestFlow.js";
 
 import {
+  formatCustomerPage,
+  enrichPageWithRequests,
+  formatRequestPage,
+  handleCustomerSearchNav,
+} from "./customerPaging.js";
+
+import {
   looksLikeCustomerSearch,
   searchCustomersFromText,
 } from "./customerLookup.js";
@@ -278,6 +285,13 @@ export class CopilotOrchestrator {
     }
     // ---------- Handle pagination & narrowing for large customer sets ----------
     if (this.customerSearchState) {
+      const navResult = await handleCustomerSearchNav(
+        this,
+        userInput,
+        context,
+        ui,
+      );
+      if (navResult) return navResult;
       const state = this.customerSearchState;
       const text = this.getCleanValue(userInput).toLowerCase();
 
