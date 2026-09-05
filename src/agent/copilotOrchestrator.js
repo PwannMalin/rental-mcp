@@ -16,6 +16,11 @@ import {
   tryResolvePendingRequestSelection,
   tryResolvePendingRequestAction,
 } from "./requestFlow.js";
+
+import {
+  looksLikeCustomerSearch,
+  searchCustomersFromText,
+} from "./customerLookup.js";
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
     this.registry = registry;
@@ -212,6 +217,13 @@ export class CopilotOrchestrator {
     const isNewSearch = clearKeywords.some((keyword) =>
       userText.includes(keyword),
     );
+
+    if (
+      looksLikeCustomerSearch(userText) &&
+      (!this.activeRequest || !this.activeRequest.CustomerNumber)
+    ) {
+      return searchCustomersFromText(this, userInput, context, ui);
+    }
 
     if (isNewSearch) {
       this.activeRequest = null;
@@ -666,160 +678,6 @@ export class CopilotOrchestrator {
       };
     }
     // Check if there is an active customer context (activeRequest with CustomerNumber)
-    if (
-      looksLikeCustomerSearch &&
-      (!this.activeRequest || !this.activeRequest.CustomerNumber)
-    ) {
-      // No active customer context, initiate customer search flow
-      // Use the userInput as search term for CUSTOMER
-      await ui.update(`Searching for customers matching your input...`);
-
-      const customerResult = await this.registry.execute(
-        "search.execute",
-        {
-          type: "CUSTOMER",
-          filterQuery: `contains(CustomerName,'${userInput.replace(/'/g, "''")}')`,
-          topCount: 50,
-        },
-        context,
-      );
-
-      const customerRows = this.getRowsFromToolResult(customerResult);
-
-      if (!customerRows.length) {
-        await this.saveSessionState(this.getSessionKey(context));
-        return {
-          success: true,
-          answer: `I couldn't find any customers matching '${userInput}'. Please try a different search term.`,
-        };
-      }
-
-      // Normalize customers
-      const customers = customerRows.map((row) => ({
-        CustomerNumber: this.getCleanValue(
-          row.CustomerNumber || row.customerNumber,
-        ),
-        Branch: this.getCleanValue(row.Branch || row.branch),
-        customerName: this.getCleanValue(
-          row.CustomerName || row.customerName || row.Name || row.name,
-        ),
-        requestCount: null,
-      }));
-
-      // Enrich customers with rental request counts
-      const enriched = [];
-      for (const customer of customers) {
-        try {
-          const rentalResult = await this.registry.execute(
-            "search.execute",
-            {
-              type: "RENTAL",
-              filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-              topCount: 20,
-            },
-            context,
-          );
-          const count = this.getRowsFromToolResult(rentalResult).length;
-          enriched.push({ ...customer, requestCount: count });
-        } catch {
-          enriched.push({ ...customer, requestCount: 0 });
-        }
-      }
-
-      // If multiple customers found, prompt user to select one or paginate
-      if (enriched.length === 1) {
-        // Auto-select single customer and fetch rental requests
-        const only = enriched[0];
-        const rentalResult = await this.registry.execute(
-          "search.execute",
-          {
-            type: "RENTAL",
-            filterQuery: `Customer eq '${only.CustomerNumber}'`,
-            topCount: 50,
-          },
-          context,
-        );
-        const rentalRows = this.getRowsFromToolResult(rentalResult);
-
-        if (!rentalRows.length) {
-          await this.saveSessionState(this.getSessionKey(context));
-          return {
-            success: true,
-            answer: `I found customer ${only.CustomerNumber} (${only.Branch || only.customerName}), but there are currently no open rental requests.`,
-          };
-        }
-
-        if (rentalResult?.success) {
-          this.rememberActiveRequest(
-            rentalResult,
-            {
-              type: "RENTAL",
-              filterQuery: `Customer eq '${only.CustomerNumber}'`,
-              topCount: 50,
-            },
-            context,
-          );
-          this.captureSchema("RENTAL", rentalResult);
-        }
-
-        await this.saveSessionState(this.getSessionKey(context));
-
-        if (rentalRows.length === 1) {
-          const row = rentalRows[0];
-          const id = this.getRequestId(row);
-          const status = this.getCleanValue(row.RequestStatus || row.Status);
-          const contact = this.getCleanValue(row.ContactName || row.Contact);
-          return {
-            success: true,
-            answer: `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\nRequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\nYou can say \"show request lines\", \"details\", or \"equipment requested\" for more information.`,
-            showPagination: false,
-          };
-        }
-
-        const requestList = rentalRows
-          .map((row, index) => {
-            const id = this.getRequestId(row);
-            const status = this.getCleanValue(row.RequestStatus || row.Status);
-            const contact = this.getCleanValue(row.ContactName || row.Contact);
-            return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-          })
-          .join("\n");
-
-        return {
-          success: true,
-          answer: `Found ${rentalRows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n${requestList}\n\nYou can say \"show request lines\" or \"details\" for more information.`,
-          showPagination: true,
-        };
-      }
-
-      // Multiple customers found, paginate and prompt selection
-      this.customerSearchState = {
-        allCustomers: enriched,
-        filtered: enriched,
-        page: 0,
-        pageSize: 25,
-        searchTerm: userInput,
-        filterQuery: `contains(CustomerName,'${userInput.replace(/'/g, "''")}')`,
-        onlyWithRequests: false,
-        hitLimit: enriched.length >= 50,
-        currentTopCount: 50,
-        checkRequests: false,
-      };
-
-      this.pendingCustomerSelection = { options: enriched };
-
-      const { lines, nav } = this.formatCustomerPage(this.customerSearchState);
-
-      await this.saveSessionState(this.getSessionKey(context));
-
-      return {
-        success: true,
-        answer: `Found ${enriched.length} customers matching '${userInput}':\n\n${lines}${nav}\n\nPlease reply with the number or Customer # you want to continue with.`,
-        showPagination: true,
-        awaitingCustomerSelection: true,
-        options: enriched,
-      };
-    }
 
     // 1) Customer pick (e.g. "1" or customer #)
     const selectionResult = await this.tryResolvePendingCustomerSelection(
