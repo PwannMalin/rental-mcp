@@ -1,4 +1,8 @@
-import { applyDateFilter, currentTimePromptBlock } from "./dateFilters.js";
+import {
+  getNow,
+  applyDateFilter,
+  currentTimePromptBlock,
+} from "./dateFilters.js";
 import {
   formatCustomerPage,
   enrichPageWithRequests,
@@ -180,7 +184,17 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
-
+    if (
+      /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
+        userText,
+      )
+    ) {
+      const t = getNow();
+      return {
+        success: true,
+        answer: `Today is ${t.local} (year ${t.year}).`,
+      };
+    }
     if (affirmative.includes(userText) && this.lastSearchResults?.length > 1) {
       return this.showRemainingResults();
     }
