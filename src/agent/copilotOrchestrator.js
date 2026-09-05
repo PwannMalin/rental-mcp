@@ -4,7 +4,7 @@ import {
   enrichPageWithRequests,
   formatRequestPage,
 } from "./customerPaging.js";
-
+import { tryResolvePendingCustomerSelection } from "./customerSelection.js";
 import {
   getRequestId,
   rememberActiveRequest,
@@ -109,6 +109,10 @@ export class CopilotOrchestrator {
 
   tryResolvePendingRequestSelection(userInput, context, ui) {
     return tryResolvePendingRequestSelection(this, userInput, context);
+  }
+
+  tryResolvePendingCustomerSelection(userInput, context, ui) {
+    return tryResolvePendingCustomerSelection(this, userInput, context);
   }
 
   tryResolvePendingRequestAction(userInput, context, ui) {
