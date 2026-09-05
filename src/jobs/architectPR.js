@@ -20,7 +20,9 @@ const BASE = process.env.GITHUB_BASE_BRANCH || "main";
 
 const ALLOW_PREFIXES = ["src/agent/", "src/jobs/", "src/llm/"];
 const FILE_ALIASES = {
-  "src/agent/customerSearch.js": "src/agent/copilotOrchestrator.js",
+  "src/agent/customerSearch.js": "src/agent/customerPaging.js",
+  "src/agent/customerContextManagement.js": "src/agent/customerSelection.js",
+  "src/agent/rentalRequestQuery.js": "src/agent/requestFlow.js",
 };
 
 function parseArgs(argv) {
