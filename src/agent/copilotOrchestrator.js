@@ -9,6 +9,8 @@ import {
   getRequestId,
   rememberActiveRequest,
   formatRequestLinesAnswer,
+  tryResolvePendingRequestSelection,
+  tryResolvePendingRequestAction,
 } from "./requestFlow.js";
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
@@ -105,6 +107,14 @@ export class CopilotOrchestrator {
     return formatRequestLinesAnswer(this, rows, userText);
   }
 
+  tryResolvePendingRequestSelection(userInput, context, ui) {
+    return tryResolvePendingRequestSelection(this, userInput, context);
+  }
+
+  tryResolvePendingRequestAction(userInput, context, ui) {
+    return tryResolvePendingRequestAction(this, userInput, context, ui);
+  }
+
   captureSchema(type, result) {
     const rows = this.getRowsFromToolResult(result);
     if (!rows.length) return;
@@ -118,47 +128,6 @@ export class CopilotOrchestrator {
     }
   }
 
-  rememberActiveRequest(result, args, context) {
-    const rows = this.getRowsFromToolResult(result);
-
-    if (!rows.length) {
-      this.activeRequest = null;
-      this.pendingRequestSelection = null;
-      return;
-    }
-
-    if (rows.length === 1) {
-      const row = rows[0];
-      this.activeRequest = {
-        RequestID: this.getRequestId(row),
-        Customer: this.getCleanValue(row.Customer || row.CustomerNumber),
-        CustomerNumber: this.getCleanValue(row.CustomerNumber || row.Customer),
-        Branch: this.getCleanValue(row.Branch),
-        RequestStatus: this.getCleanValue(row.Status || row.RequestStatus),
-        ContactName: this.getCleanValue(row.ContactName || row.Contact),
-      };
-      this.pendingRequestSelection = null;
-      console.log(
-        "ACTIVE REQUEST SET:",
-        JSON.stringify(this.activeRequest, null, 2),
-      );
-    } else {
-      this.pendingRequestSelection = {
-        options: rows.map((row) => ({
-          RequestID: this.getRequestId(row),
-          Customer: this.getCleanValue(row.Customer || row.CustomerNumber),
-          CustomerNumber: this.getCleanValue(
-            row.CustomerNumber || row.Customer,
-          ),
-          Branch: this.getCleanValue(row.Branch),
-          RequestStatus: this.getCleanValue(row.Status || row.RequestStatus),
-          ContactName: this.getCleanValue(row.ContactName || row.Contact),
-        })),
-      };
-      this.activeRequest = null;
-    }
-  }
-
   formatCustomerPage(state) {
     return formatCustomerPage(state);
   }
@@ -169,275 +138,6 @@ export class CopilotOrchestrator {
 
   formatRequestPage(enriched, state) {
     return formatRequestPage(enriched, state);
-  }
-
-  async tryResolvePendingRequestSelection(userInput, context, ui) {
-    if (!this.pendingRequestSelection?.options?.length) {
-      return null;
-    }
-
-    const value = this.getCleanValue(userInput).toLowerCase();
-
-    const match = this.pendingRequestSelection.options.find((r, index) => {
-      const requestId = this.getCleanValue(r.RequestID).toLowerCase();
-
-      return value === requestId || parseInt(value, 10) === index + 1;
-    });
-
-    if (!match) {
-      console.log("No match found for pending request selection:", value);
-      return null;
-    }
-
-    this.activeRequest = {
-      RequestID: match.RequestID,
-      Customer: this.getCleanValue(match.Customer || match.CustomerNumber),
-      CustomerNumber: this.getCleanValue(
-        match.CustomerNumber || match.Customer,
-      ),
-      Branch: this.getCleanValue(match.Branch),
-      RequestStatus: this.getCleanValue(match.RequestStatus || match.Status),
-      ContactName: this.getCleanValue(match.ContactName || match.Contact),
-    };
-
-    this.pendingRequestSelection = null;
-    this.customerSearchState = null;
-
-    console.log(
-      "ACTIVE REQUEST SET FROM SELECTION:",
-      JSON.stringify(this.activeRequest, null, 2),
-    );
-
-    await this.saveSessionState(this.getSessionKey(context));
-
-    return {
-      success: true,
-      answer:
-        `Selected RequestID ${this.activeRequest.RequestID}` +
-        `${this.activeRequest.CustomerNumber ? ` for customer ${this.activeRequest.CustomerNumber}` : ""}.\n\n` +
-        `You can say "show request lines", "details", or "equipment requested" for more information.`,
-    };
-  }
-
-  async tryResolvePendingCustomerSelection(userInput, context, ui) {
-    if (!this.pendingCustomerSelection?.options?.length) {
-      return null;
-    }
-
-    const value = this.getCleanValue(userInput);
-
-    const match = this.pendingCustomerSelection.options.find((c, index) => {
-      const customerNumber = this.getCleanValue(c.CustomerNumber);
-      const branch = this.getCleanValue(c.Branch).toLowerCase();
-
-      return (
-        customerNumber === value ||
-        branch === value.toLowerCase() ||
-        parseInt(value) === index + 1
-      );
-    });
-
-    if (!match) {
-      console.log("No match found for pending customer selection:", value);
-      return null;
-    }
-
-    // Only clear on a successful match
-    this.pendingCustomerSelection = null;
-    this.customerSearchState = null; // ← correct place
-
-    console.log("Matched customer:", match);
-
-    // ... rest of the method stays the same
-
-    const result = await this.registry.execute(
-      "search.execute",
-      {
-        type: "RENTAL",
-        filterQuery: `Customer eq '${match.CustomerNumber}'`,
-        topCount: 50,
-      },
-      context,
-    );
-
-    const rows = this.getRowsFromToolResult(result);
-
-    if (!rows.length) {
-      return {
-        success: true,
-        answer: `I found customer ${match.CustomerNumber} (${match.Branch || match.customerName}), but there are currently no open rental requests for this customer.`,
-      };
-    }
-
-    if (result?.success) {
-      this.rememberActiveRequest(
-        result,
-        {
-          type: "RENTAL",
-          filterQuery: `Customer eq '${match.CustomerNumber}'`,
-          topCount: 50,
-        },
-        context,
-      );
-      this.captureSchema("RENTAL", result);
-    }
-
-    await this.saveSessionState(this.getSessionKey(context));
-    const requestList = rows
-      .map((row, index) => {
-        const id = this.getRequestId(row);
-        const status = this.getCleanValue(row.RequestStatus || row.Status);
-        const contact = this.getCleanValue(row.ContactName || row.Contact);
-        return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-      })
-      .join("\n");
-
-    return {
-      success: true,
-      answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`,
-    };
-  }
-
-  async tryResolvePendingRequestAction(userInput, context, ui) {
-    if (!this.activeRequest) {
-      return null;
-    }
-    this.customerSearchState = null;
-
-    const userText = this.getCleanValue(userInput).toLowerCase();
-
-    const showLinesKeywords = [
-      "request lines",
-      "rental request lines",
-      "show me the lines",
-      "show lines",
-      "show request lines",
-      "can i get the rental request lines",
-      "request details",
-      "show the full line",
-      "full line",
-      "more details on the line",
-      "expand the line",
-      "show everything on the line",
-      "full equipment info",
-      "full equipment",
-      "equipment info",
-      "equipment requested",
-      "what equipment",
-      "the equipment",
-      "all the information",
-      "all information",
-      "all the lines",
-      "all lines",
-      "everything",
-      "full details",
-      "model",
-      "details",
-      "more details",
-      "serial",
-      "capacity",
-      "oach",
-      "qty",
-      "quantity",
-    ];
-
-    const isLineNumber = /^\d+$/.test(userText);
-
-    const wantsLines =
-      showLinesKeywords.some((keyword) => userText.includes(keyword)) ||
-      isLineNumber ||
-      // catch common free-form phrases
-      (userText.includes("equipment") && this.activeRequest) ||
-      (userText.includes("lines") && this.activeRequest) ||
-      (userText.includes("information") && this.activeRequest);
-
-    if (!wantsLines) {
-      return null;
-    }
-
-    if (this.activeRequest.lines && this.activeRequest.lines.length > 0) {
-      return this.formatRequestLinesAnswer(this.activeRequest.lines, userText);
-    }
-
-    const filterQuery = `RequestID eq ${this.activeRequest.RequestID}`;
-    await ui.update(
-      `Fetching request lines for RequestID ${this.activeRequest.RequestID}...`,
-    );
-
-    const result = await this.registry.execute(
-      "search.execute",
-      {
-        type: "REQUEST_LINES",
-        filterQuery,
-        topCount: 50,
-      },
-      context,
-    );
-
-    this.captureSchema("REQUEST_LINES", result);
-
-    const rows = this.getRowsFromToolResult(result);
-    this.activeRequest.lines = rows;
-
-    return this.formatRequestLinesAnswer(rows, userText);
-  }
-
-  formatRequestLinesAnswer(rows, userText = "") {
-    if (!rows || rows.length === 0) {
-      return {
-        success: true,
-        answer: `I found RequestID ${this.activeRequest.RequestID}, but there are no request lines for it.`,
-      };
-    }
-
-    const wantsFull =
-      userText.includes("full") ||
-      userText.includes("more details") ||
-      userText.includes("expand") ||
-      userText.includes("everything") ||
-      userText.includes("serial") ||
-      userText.includes("info") ||
-      userText.includes("model") ||
-      userText.includes("capacity") ||
-      userText.includes("oach");
-
-    const lineNumber = parseInt(userText, 10);
-    let linesToShow = rows;
-
-    if (!isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= rows.length) {
-      linesToShow = [rows[lineNumber - 1]];
-    }
-
-    const linesText = linesToShow
-      .map((row, index) => {
-        const displayIndex =
-          linesToShow.length === 1 ? lineNumber || 1 : index + 1;
-
-        const model = row.EquipModel || row.Model || "—";
-        const qty = row.RequestedQty || row.Quantity || row.Qty || "—";
-        const oach = row.OACH || "—";
-        const capacity = row.Capacity || "—";
-        const series = row.EquipSeries || "";
-        const group = row.EquipGroup || "";
-        const comments = row.comments || row.Comments || "";
-
-        if (wantsFull || linesToShow.length === 1) {
-          return (
-            `${displayIndex}. ${model}\n` +
-            `Group: ${group} | Series: ${series}\n` +
-            `Qty: ${qty} | OACH: ${oach} | Capacity: ${capacity} lbs` +
-            (comments ? `\nNotes: ${comments.trim()}` : "")
-          );
-        }
-
-        return `${displayIndex}. ${model} — Qty: ${qty} — OACH: ${oach} — Capacity: ${capacity} lbs`;
-      })
-      .join("\n\n");
-
-    return {
-      success: true,
-      answer: `Found ${rows.length} request line(s) for RequestID ${this.activeRequest.RequestID}:\n\n${linesText}`,
-    };
   }
 
   async runStreaming(userInput, context = {}, ui) {

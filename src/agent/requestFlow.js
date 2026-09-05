@@ -104,3 +104,127 @@ export function formatRequestLinesAnswer(orchestrator, rows, userText = "") {
     answer: `Found ${rows.length} request line(s) for RequestID ${orchestrator.activeRequest.RequestID}:\n\n${linesText}`,
   };
 }
+
+export async function tryResolvePendingRequestSelection(
+  orchestrator,
+  userInput,
+  context,
+) {
+  if (!orchestrator.pendingRequestSelection?.options?.length) {
+    return null;
+  }
+
+  const value = orchestrator.getCleanValue(userInput).toLowerCase();
+
+  const match = orchestrator.pendingRequestSelection.options.find(
+    (r, index) => {
+      const requestId = orchestrator.getCleanValue(r.RequestID).toLowerCase();
+      return value === requestId || parseInt(value, 10) === index + 1;
+    },
+  );
+
+  if (!match) {
+    console.log("No match found for pending request selection:", value);
+    return null;
+  }
+
+  orchestrator.activeRequest = {
+    RequestID: match.RequestID,
+    Customer: orchestrator.getCleanValue(
+      match.Customer || match.CustomerNumber,
+    ),
+    CustomerNumber: orchestrator.getCleanValue(
+      match.CustomerNumber || match.Customer,
+    ),
+    Branch: orchestrator.getCleanValue(match.Branch),
+    RequestStatus: orchestrator.getCleanValue(
+      match.RequestStatus || match.Status,
+    ),
+    ContactName: orchestrator.getCleanValue(match.ContactName || match.Contact),
+  };
+
+  orchestrator.pendingRequestSelection = null;
+  orchestrator.customerSearchState = null;
+
+  await orchestrator.saveSessionState(orchestrator.getSessionKey(context));
+
+  return {
+    success: true,
+    answer:
+      `Selected RequestID ${orchestrator.activeRequest.RequestID}` +
+      `${orchestrator.activeRequest.CustomerNumber ? ` for customer ${orchestrator.activeRequest.CustomerNumber}` : ""}.\n\n` +
+      `You can say "show request lines", "details", or "equipment requested" for more information.`,
+  };
+}
+
+export async function tryResolvePendingRequestAction(
+  orchestrator,
+  userInput,
+  context,
+  ui,
+) {
+  if (!orchestrator.activeRequest) return null;
+
+  orchestrator.customerSearchState = null;
+  const userText = orchestrator.getCleanValue(userInput).toLowerCase();
+
+  const showLinesKeywords = [
+    "request lines",
+    "rental request lines",
+    "show me the lines",
+    "show lines",
+    "show request lines",
+    "request details",
+    "full details",
+    "details",
+    "more details",
+    "equipment requested",
+    "what equipment",
+    "equipment info",
+    "full equipment",
+    "lines",
+    "model",
+    "serial",
+    "capacity",
+    "oach",
+    "qty",
+    "quantity",
+  ];
+
+  const isLineNumber = /^\d+$/.test(userText);
+  const wantsLines =
+    showLinesKeywords.some((keyword) => userText.includes(keyword)) ||
+    isLineNumber ||
+    (userText.includes("equipment") && orchestrator.activeRequest) ||
+    (userText.includes("information") && orchestrator.activeRequest);
+
+  if (!wantsLines) return null;
+
+  if (orchestrator.activeRequest.lines?.length) {
+    return formatRequestLinesAnswer(
+      orchestrator,
+      orchestrator.activeRequest.lines,
+      userText,
+    );
+  }
+
+  await ui.update(
+    `Fetching request lines for RequestID ${orchestrator.activeRequest.RequestID}...`,
+  );
+
+  const result = await orchestrator.registry.execute(
+    "search.execute",
+    {
+      type: "REQUEST_LINES",
+      filterQuery: `RequestID eq ${orchestrator.activeRequest.RequestID}`,
+      topCount: 50,
+    },
+    context,
+  );
+
+  orchestrator.captureSchema("REQUEST_LINES", result);
+  const rows = orchestrator.getRowsFromToolResult(result);
+  orchestrator.activeRequest.lines = rows;
+
+  return formatRequestLinesAnswer(orchestrator, rows, userText);
+}
