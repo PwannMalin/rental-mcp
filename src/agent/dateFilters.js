@@ -33,10 +33,10 @@ export function resolveDateRange(userInput) {
     return { ge: daysAgo(90), lt: end };
   }
   if (/this year|started this year/.test(text)) {
-    return { ge: `${now.getUTCFullYear()}-01-01T00:00:00Z`, lt: end };
+    return { ge: `${now.getUTCFullYear()}-01-01T00:00:00`, lt: end };
   }
   if (/\btoday\b/.test(text)) {
-    return { ge: `${now.toISOString().slice(0, 10)}T00:00:00Z`, lt: end };
+    return { ge: `${now.toISOString().slice(0, 10)}T00:00:00`, lt: end };
   }
   return null;
 }
