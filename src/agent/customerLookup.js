@@ -1,16 +1,13 @@
 export function looksLikeCustomerSearch(userText) {
   const text = String(userText || "").toLowerCase();
   if (
-    /request|this year|past month|past quarter|how many|what date|what time|what year/.test(
+    /request|this year|past month|how many|what date|what time|what year/.test(
       text,
     )
   ) {
     return false;
   }
-  return (
-    /customer|find |look up|lookup|search for/.test(text) ||
-    /^[a-z0-9][a-z0-9 .&-]{2,}$/i.test(text)
-  );
+  return /customer|find |look up|lookup|search for/.test(text);
 }
 
 export async function searchCustomersFromText(

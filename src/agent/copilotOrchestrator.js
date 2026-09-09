@@ -192,6 +192,11 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
+
+    const namedRequests =
+      userText.match(/find (.+?) requests?/) ||
+      userText.match(/requests? for (.+)/);
+
     if (
       /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
         userText,
@@ -199,6 +204,11 @@ export class CopilotOrchestrator {
     ) {
       const t = getNow();
       return { success: true, answer: `Today is ${t.local} (year ${t.year}).` };
+    }
+
+    if (namedRequests) {
+      const name = namedRequests[1].replace(/paper/gi, "").trim();
+      return searchCustomersFromText(this, name, context, ui);
     }
 
     if (
@@ -229,7 +239,7 @@ export class CopilotOrchestrator {
 
     if (looksLikeGlobalRequestQuery) {
       const year = new Date().getFullYear();
-      const filterQuery = `RequestedOn ge ${year}-01-01T00:00:00Z`;
+      const filterQuery = `RequestedOn ge datetime'${year}-01-01T00:00:00'`;
       await ui.update(`Searching rental requests from ${year}-01-01 to today…`);
       const rentalResult = await this.registry.execute(
         "search.execute",
