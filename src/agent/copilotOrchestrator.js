@@ -220,7 +220,7 @@ export class CopilotOrchestrator {
         "search.execute",
         {
           type: "RENTAL",
-          filterQuery: `RequestedOn ge ${year}-01-01T00:00:00`,
+          filterQuery: `RequestedOn ge datetime'${year}-01-01T00:00:00'`,
           topCount: 50,
         },
         context,
