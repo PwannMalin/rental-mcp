@@ -192,7 +192,37 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
+    if (
+      /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
+        userText,
+      )
+    ) {
+      const t = getNow();
+      return { success: true, answer: `Today is ${t.local} (year ${t.year}).` };
+    }
 
+    if (
+      /request/.test(userText) &&
+      /this year|past month|past quarter|today|how many|all/.test(userText)
+    ) {
+      const year = new Date().getFullYear();
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `RequestedOn ge ${year}-01-01T00:00:00Z`,
+          topCount: 50,
+        },
+        context,
+      );
+      const rows = this.getRowsFromToolResult(rentalResult);
+      return {
+        success: true,
+        answer: rows.length
+          ? `Found ${rows.length} rental request(s) so far this year (showing up to 50).`
+          : `No rental requests found from ${year}-01-01 through today.`,
+      };
+    }
     const looksLikeGlobalRequestQuery =
       /request/.test(userText) &&
       /this year|past month|past quarter|today|how many|all/.test(userText);
@@ -214,7 +244,17 @@ export class CopilotOrchestrator {
           : `No rental requests found from ${year}-01-01 through today. I searched RequestHeader by RequestedOn.`,
       };
     }
-
+    if (
+      /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
+        userText,
+      )
+    ) {
+      const t = getNow();
+      return {
+        success: true,
+        answer: `Today is ${t.local} (year ${t.year}).`,
+      };
+    }
     if (
       looksLikeCustomerSearch(userText) &&
       (!this.activeRequest || !this.activeRequest.CustomerNumber)
@@ -249,13 +289,6 @@ export class CopilotOrchestrator {
     const isNewSearch = clearKeywords.some((keyword) =>
       userText.includes(keyword),
     );
-
-    if (
-      looksLikeCustomerSearch(userText) &&
-      (!this.activeRequest || !this.activeRequest.CustomerNumber)
-    ) {
-      return searchCustomersFromText(this, userInput, context, ui);
-    }
 
     if (isNewSearch) {
       this.activeRequest = null;
@@ -777,479 +810,12 @@ export class CopilotOrchestrator {
                 normalizedType === "CUSTOMER" &&
                 rows.length > 0
               ) {
-                const totalCount = result?.count || rows.length;
-                const pageSize = 25;
-
-                // If the search term includes 'amazon', apply OData filter to find customers with CustomerName containing 'Amazon'
-                let filteredCustomers = [];
-                if (
-                  args.SearchTerm &&
-                  args.SearchTerm.toLowerCase().includes("amazon")
-                ) {
-                  // Fetch customers filtered by contains(CustomerName,'Amazon')
-                  const amazonResult = await this.registry.execute(
-                    "search.execute",
-                    {
-                      type: "CUSTOMER",
-                      filterQuery: searchTerm
-                        ? `contains(CustomerName,'${safeTerm}')`
-                        : args.filterQuery,
-                      topCount: 500,
-                    },
-                    context,
-                  );
-                  const amazonRows = this.getRowsFromToolResult(amazonResult);
-
-                  // Normalize amazon customers
-                  filteredCustomers = amazonRows.map((row) => ({
-                    CustomerNumber: this.getCleanValue(
-                      row.CustomerNumber || row.customerNumber,
-                    ),
-                    Branch: this.getCleanValue(row.Branch || row.branch),
-                    customerName: this.getCleanValue(
-                      row.CustomerName ||
-                        row.customerName ||
-                        row.Name ||
-                        row.name,
-                    ),
-                    requestCount: null,
-                  }));
-
-                  // Enrich filtered customers with rental request counts (only first 25 to limit load)
-                  const enriched = [];
-                  const sampleSize = Math.min(25, filteredCustomers.length);
-                  for (let i = 0; i < sampleSize; i++) {
-                    const customer = filteredCustomers[i];
-                    try {
-                      const rentalResult = await this.registry.execute(
-                        "search.execute",
-                        {
-                          type: "RENTAL",
-                          filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                          topCount: 50,
-                        },
-                        context,
-                      );
-                      const rentalRows =
-                        this.getRowsFromToolResult(rentalResult);
-                      enriched.push({
-                        ...customer,
-                        requestCount: rentalRows.length,
-                      });
-                    } catch {
-                      enriched.push({ ...customer, requestCount: 0 });
-                    }
-                  }
-
-                  filteredCustomers = enriched;
-
-                  // Pagination state for filtered customers
-                  this.customerSearchState = {
-                    allCustomers: filteredCustomers,
-                    filtered: filteredCustomers,
-                    page: 0,
-                    pageSize: pageSize,
-                    searchTerm: args.SearchTerm || "",
-                    filterQuery: searchTerm
-                      ? `contains(CustomerName,'${safeTerm}')`
-                      : args.filterQuery,
-                    onlyWithRequests: false,
-                    hitLimit: filteredCustomers.length >= 500,
-                    currentTopCount: 500,
-                    checkRequests: false,
-                  };
-
-                  this.pendingCustomerSelection = null;
-
-                  if (filteredCustomers.length === 0) {
-                    this.customerSearchState = null;
-                    this.pendingCustomerSelection = null;
-                    await this.saveSessionState(sessionKey);
-                    return {
-                      success: true,
-                      answer: `No customers with name containing ${searchTerm}' were found. Would you like to try a different search?`,
-                    };
-                  }
-
-                  if (filteredCustomers.length <= 15) {
-                    const withRequests = filteredCustomers.filter(
-                      (c) => c.requestCount > 0,
-                    );
-                    if (withRequests.length === 0) {
-                      this.customerSearchState = null;
-                      this.pendingCustomerSelection = null;
-                      await this.saveSessionState(sessionKey);
-                      return {
-                        success: true,
-                        answer: `No customers matching your search have any active rental requests among the first ${sampleSize} ${searchTerm}' customers checked.\n\nWould you like to search for something else or check more? You can say "load more" to check more customers.`,
-                      };
-                    }
-                    if (withRequests.length === 1) {
-                      const only = withRequests[0];
-                      this.pendingCustomerSelection = null;
-                      this.customerSearchState = null;
-                      await this.saveSessionState(sessionKey);
-                      const rentalResult = await this.registry.execute(
-                        "search.execute",
-                        {
-                          type: "RENTAL",
-                          filterQuery: `Customer eq '${only.CustomerNumber}'`,
-                          topCount: 50,
-                        },
-                        context,
-                      );
-                      const rentalRows =
-                        this.getRowsFromToolResult(rentalResult);
-                      if (!rentalRows.length) {
-                        await this.saveSessionState(sessionKey);
-                        return {
-                          success: true,
-                          answer: `I found customer ${only.CustomerNumber} (${only.Branch || only.customerName}), but there are currently no open rental requests.`,
-                        };
-                      }
-                      if (rentalResult?.success) {
-                        this.rememberActiveRequest(
-                          rentalResult,
-                          {
-                            type: "RENTAL",
-                            filterQuery: `Customer eq '${only.CustomerNumber}'`,
-                            topCount: 50,
-                          },
-                          context,
-                        );
-                        this.captureSchema("RENTAL", rentalResult);
-                      }
-                      await this.saveSessionState(sessionKey);
-                      if (rentalRows.length === 1) {
-                        const row = rentalRows[0];
-                        const id = this.getRequestId(row);
-                        const status = this.getCleanValue(
-                          row.RequestStatus || row.Status,
-                        );
-                        const contact = this.getCleanValue(
-                          row.ContactName || row.Contact,
-                        );
-                        return {
-                          success: true,
-                          answer:
-                            `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
-                            `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
-                            `You can say "show request lines", "details", or "equipment requested" for more information.`,
-                          showPagination: false,
-                        };
-                      }
-                      const requestList = rentalRows
-                        .map((row, index) => {
-                          const id = this.getRequestId(row);
-                          const status = this.getCleanValue(
-                            row.RequestStatus || row.Status,
-                          );
-                          const contact = this.getCleanValue(
-                            row.ContactName || row.Contact,
-                          );
-                          return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-                        })
-                        .join("\n");
-                      return {
-                        success: true,
-                        answer:
-                          `Found ${rentalRows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
-                          requestList +
-                          `\n\nYou can say "show request lines" or "details" for more information.`,
-                        showPagination: true,
-                      };
-                    }
-                    this.pendingCustomerSelection = { options: withRequests };
-                    this.customerSearchState = null;
-                    await this.saveSessionState(sessionKey);
-                    const lines = withRequests.map(
-                      (c, i) =>
-                        `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`,
-                    );
-                    return {
-                      success: true,
-                      answer:
-                        `Found ${withRequests.length} customer(s) with active rental requests among the first ${sampleSize} ${searchTerm} customers checked:\n\n` +
-                        lines.join("\n") +
-                        `\n\nPlease reply with the number or Customer # you want to continue with. You can also say "load more" to check more ${searchTerm} customers.`,
-                      showPagination: true,
-                      awaitingCustomerSelection: true,
-                      options: withRequests,
-                    };
-                  }
-
-                  // For larger sets, paginate filtered customers
-                  const hitLimit = filteredCustomers.length >= 500;
-                  const pageFmt = this.formatCustomerPage(
-                    this.customerSearchState,
-                  );
-                  await this.saveSessionState(sessionKey);
-                  let extraHint = "";
-                  if (hitLimit) {
-                    extraHint =
-                      `\n\n⚠️  I only retrieved the first 500 matches. There are likely more.\n` +
-                      `• Say **"load more"** (or "show 1000") to fetch a larger set\n` +
-                      `• Or narrow by branch / name / "only with open requests"`;
-                  }
-                  return {
-                    success: true,
-                    answer:
-                      `I found ${filteredCustomers.length} customers matching your search with name containing '${searchTerm}'.\n\n` +
-                      `Showing first ${Math.min(pageSize, filteredCustomers.length)}:\n\n` +
-                      pageFmt.lines +
-                      pageFmt.nav +
-                      `\n\nThis is a large result set. You can:\n` +
-                      `• Reply with a **branch** name (e.g. "Houston")\n` +
-                      `• Give a more specific name (e.g. "${searchTerm} Logistics")\n` +
-                      `• Say **"only with open requests"** and I'll check a larger sample\n` +
-                      `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
-                      extraHint,
-                    awaitingCustomerSelection: false,
-                    showPagination: true,
-                  };
-                } else {
-                  // Normalize the raw rows into a consistent shape
-                  let allCustomers = rows.map((row) => ({
-                    CustomerNumber: this.getCleanValue(
-                      row.CustomerNumber || row.customerNumber,
-                    ),
-                    Branch: this.getCleanValue(row.Branch || row.branch),
-                    customerName: this.getCleanValue(
-                      row.CustomerName ||
-                        row.customerName ||
-                        row.Name ||
-                        row.name,
-                    ),
-                    requestCount: null, // filled later if we enrich
-                  }));
-
-                  // ---------- SMALL RESULT SET (≤ 15) → enrich immediately ----------
-                  if (allCustomers.length <= 15) {
-                    const enriched = [];
-                    for (const customer of allCustomers) {
-                      try {
-                        const rentalResult = await this.registry.execute(
-                          "search.execute",
-                          {
-                            type: "RENTAL",
-                            filterQuery: `Customer eq '${customer.CustomerNumber}'`,
-                            topCount: 50,
-                          },
-                          context,
-                        );
-                        const rentalRows =
-                          this.getRowsFromToolResult(rentalResult);
-                        enriched.push({
-                          ...customer,
-                          requestCount: rentalRows.length,
-                        });
-                      } catch {
-                        enriched.push({ ...customer, requestCount: 0 });
-                      }
-                    }
-
-                    const withRequests = enriched.filter(
-                      (c) => c.requestCount > 0,
-                    );
-
-                    if (withRequests.length === 0) {
-                      this.customerSearchState = null;
-                      this.pendingCustomerSelection = null;
-
-                      await this.saveSessionState(sessionKey);
-                      return {
-                        success: true,
-                        answer: `No customers matching your search have any active rental requests among the ${enriched.length} checked.\n\nWould you like to search for something else?`,
-                      };
-                    }
-                    if (withRequests.length === 1) {
-                      // Auto-select the only customer
-                      const only = withRequests[0];
-                      this.pendingCustomerSelection = null;
-                      this.customerSearchState = null;
-                      await this.saveSessionState(sessionKey);
-                      // Immediately fetch its rental requests (same logic as tryResolvePendingCustomerSelection)
-                      const result = await this.registry.execute(
-                        "search.execute",
-                        {
-                          type: "RENTAL",
-                          filterQuery: `Customer eq '${only.CustomerNumber}'`,
-                          topCount: 50,
-                        },
-                        context,
-                      );
-
-                      const rows = this.getRowsFromToolResult(result);
-
-                      if (!rows.length) {
-                        await this.saveSessionState(sessionKey);
-                        return {
-                          success: true,
-                          answer: `I found customer ${only.CustomerNumber} (${only.Branch || only.customerName}), but there are currently no open rental requests.`,
-                        };
-                      }
-
-                      if (result?.success) {
-                        this.rememberActiveRequest(
-                          result,
-                          {
-                            type: "RENTAL",
-                            filterQuery: `Customer eq '${only.CustomerNumber}'`,
-                            topCount: 50,
-                          },
-                          context,
-                        );
-                        this.captureSchema("RENTAL", result);
-                      }
-
-                      await this.saveSessionState(sessionKey);
-
-                      // If there is also only one request, go straight to a nice summary
-                      if (rows.length === 1) {
-                        const row = rows[0];
-                        const id = this.getRequestId(row);
-                        const status = this.getCleanValue(
-                          row.RequestStatus || row.Status,
-                        );
-                        const contact = this.getCleanValue(
-                          row.ContactName || row.Contact,
-                        );
-
-                        return {
-                          success: true,
-                          answer:
-                            `Found 1 rental request for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
-                            `RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}\n\n` +
-                            `You can say "show request lines", "details", or "equipment requested" for more information.`,
-                          showPagination: false,
-                        };
-                      }
-
-                      // Multiple requests → list them
-                      const requestList = rows
-                        .map((row, index) => {
-                          const id = this.getRequestId(row);
-                          const status = this.getCleanValue(
-                            row.RequestStatus || row.Status,
-                          );
-                          const contact = this.getCleanValue(
-                            row.ContactName || row.Contact,
-                          );
-                          return `${index + 1}. RequestID ${id} — Status: ${status}${contact ? ` — Contact: ${contact}` : ""}`;
-                        })
-                        .join("\n");
-
-                      return {
-                        success: true,
-                        answer:
-                          `Found ${rows.length} rental request(s) for ${only.customerName} (Customer #${only.CustomerNumber}):\n\n` +
-                          requestList +
-                          `\n\nYou can say "show request lines" or "details" for more information.`,
-                        showPagination: true,
-                      };
-                    }
-
-                    this.pendingCustomerSelection = { options: withRequests };
-                    this.customerSearchState = null;
-                    await this.saveSessionState(sessionKey);
-
-                    const lines = withRequests.map(
-                      (c, i) =>
-                        `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber} — Requests: ${c.requestCount}`,
-                    );
-
-                    return {
-                      success: true,
-                      answer:
-                        `Found ${withRequests.length} customer(s) with active rental requests:\n\n` +
-                        lines.join("\n") +
-                        `\n\nPlease reply with the number or Customer # you want to continue with.`,
-                      showPagination: true,
-                      awaitingCustomerSelection: true,
-                      options: withRequests,
-                    };
-                  }
-
-                  // ---------- LARGE RESULT SET (> 15) ----------
-                  const hitLimit = allCustomers.length >= 100;
-                  const wantsRequests =
-                    /request/i.test(userInput) || /rental/i.test(userInput);
-
-                  this.customerSearchState = {
-                    allCustomers,
-                    filtered: allCustomers,
-                    page: 0,
-                    pageSize: 25,
-                    searchTerm: args.SearchTerm || "",
-                    filterQuery:
-                      args.filterQuery ||
-                      (args.SearchTerm
-                        ? `contains(CustomerName,'${String(args.SearchTerm).replace(/'/g, "''")}')`
-                        : ""),
-                    onlyWithRequests: false,
-                    hitLimit,
-                    currentTopCount: args.topCount || 100,
-                    checkRequests: wantsRequests,
-                  };
-
-                  this.pendingCustomerSelection = null;
-
-                  if (wantsRequests) {
-                    const enriched = await this.enrichPageWithRequests(
-                      this.customerSearchState,
-                      context,
-                      ui,
-                    );
-                    const pageResult = this.formatRequestPage(
-                      enriched,
-                      this.customerSearchState,
-                    );
-
-                    if (pageResult.withRequests.length > 0) {
-                      this.pendingCustomerSelection = {
-                        options: pageResult.withRequests,
-                      };
-                    }
-
-                    await this.saveSessionState(sessionKey);
-
-                    return {
-                      success: true,
-                      answer: pageResult.answer,
-                      showPagination: pageResult.showPagination,
-                    };
-                  }
-
-                  const pageFmt = this.formatCustomerPage(
-                    this.customerSearchState,
-                  );
-                  await this.saveSessionState(sessionKey);
-
-                  let extraHint = "";
-                  if (hitLimit) {
-                    extraHint =
-                      `\n\n⚠️  I only retrieved the first 100 matches. There are likely more.\n` +
-                      `• Say **"load more"** (or "show 250") to fetch a larger set\n` +
-                      `• Or narrow by branch / name / "only with open requests"`;
-                  }
-
-                  return {
-                    success: true,
-                    answer:
-                      `I found ${allCustomers.length} customers matching your search.\n\n` +
-                      `Showing first ${Math.min(pageSize, allCustomers.length)}:\n\n` +
-                      pageFmt.lines +
-                      pageFmt.nav +
-                      `\n\nThis is a large result set. You can:\n` +
-                      `• Reply with a **branch** name (e.g. "Houston")\n` +
-                      `• Give a more specific name (e.g. "Amazon Logistics")\n` +
-                      `• Say **"only with open requests"** and I'll check a larger sample\n` +
-                      `• Or use **Next ${pageSize}** / **Prev ${pageSize}** to browse` +
-                      extraHint,
-                    awaitingCustomerSelection: false,
-                    showPagination: true,
-                  };
-                }
+                return searchCustomersFromText(
+                  this,
+                  args.SearchTerm || userInput,
+                  context,
+                  ui,
+                );
               }
 
               // Remember active rental request
