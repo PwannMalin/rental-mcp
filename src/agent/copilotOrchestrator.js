@@ -220,7 +220,7 @@ export class CopilotOrchestrator {
         "search.execute",
         {
           type: "RENTAL",
-          filterQuery: `RequestedOn ge ${year}-01-01T00:00:00Z`,
+          filterQuery: `RequestedOn ge ${year}-01-01T00:00:00`,
           topCount: 50,
         },
         context,
@@ -656,7 +656,7 @@ export class CopilotOrchestrator {
 
     if (looksLikeGlobalRequestQuery) {
       const range = {
-        ge: `${new Date().getFullYear()}-01-01T00:00:00Z`,
+        ge: `${new Date().getFullYear()}-01-01T00:00:00`,
         lt: new Date().toISOString(),
       };
       await ui.update(
