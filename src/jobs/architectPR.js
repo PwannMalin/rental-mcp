@@ -189,6 +189,7 @@ async function main() {
     .map((f) => (typeof f === "string" ? { path: f } : f))
     .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
     .filter((f) => allowed.has(f.path));
+
   const files = (plan.files || [])
     .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
     .filter((f) => isAllowedPath(f.path));
