@@ -25,6 +25,8 @@ const FILE_ALIASES = {
   "src/agent/rentalRequestQuery.js": "src/agent/requestFlow.js",
 };
 
+const { registry } = createRegistry({});
+
 function parseArgs(argv) {
   const out = {};
   for (const a of argv) {
@@ -52,6 +54,31 @@ function applyReplacements(content, replacements) {
     next = next.replace(oldStr, newStr);
   }
   return next;
+}
+
+const q = [
+  row.critique?.summary,
+  ...(row.critique?.targetAreas || []),
+  ...(row.critique?.requiredFixes || []),
+]
+  .filter(Boolean)
+  .join(" ")
+  .slice(0, 200);
+
+let searchHits = [];
+try {
+  const found = await registry.execute("github.searchRepo", {
+    owner: OWNER,
+    repo: REPO,
+    query: q || "RequestedOn dateFilters",
+  });
+  searchHits = found?.data || found || [];
+  console.log(
+    "Explorer hits:",
+    JSON.stringify(searchHits, null, 2).slice(0, 1500),
+  );
+} catch (err) {
+  console.warn("searchRepo failed:", err.message);
 }
 
 function isAllowedPath(p) {
@@ -116,7 +143,10 @@ async function main() {
   const planRaw = await runAgent({
     llm,
     system: ARCHITECT_SYSTEM,
-    user: buildArchitectUserPayload({ critiqueRow: row }),
+    user: buildArchitectUserPayload({
+      critiqueRow: row,
+      relevantSearchHits: searchHits,
+    }),
     temperature: 0.2,
     maxTokens: 2000,
   });
@@ -145,7 +175,20 @@ async function main() {
     });
     return;
   }
+  const allowed = new Set([
+    "src/agent/dateFilters.js",
+    "src/agent/customerLookup.js",
+    "src/agent/customerPaging.js",
+    "src/agent/customerSelection.js",
+    "src/agent/requestFlow.js",
+    "src/agent/copilotOrchestrator.js",
+    "src/jobs/architectPR.js",
+  ]);
 
+  plan.files = (plan.files || plan.filesToModify || [])
+    .map((f) => (typeof f === "string" ? { path: f } : f))
+    .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
+    .filter((f) => allowed.has(f.path));
   const files = (plan.files || [])
     .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
     .filter((f) => isAllowedPath(f.path));
