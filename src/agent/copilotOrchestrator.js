@@ -220,7 +220,7 @@ export class CopilotOrchestrator {
         "search.execute",
         {
           type: "RENTAL",
-          filterQuery: `RequestedOn ge datetime'${year}-01-01T00:00:00'`,
+          filterQuery: `date(RequestedOn) ge date(${year}-01-01)`,
           topCount: 50,
         },
         context,
@@ -239,7 +239,7 @@ export class CopilotOrchestrator {
 
     if (looksLikeGlobalRequestQuery) {
       const year = new Date().getFullYear();
-      const filterQuery = `RequestedOn ge datetime'${year}-01-01T00:00:00'`;
+      const filterQuery = `date(RequestedOn) ge date(${year}-01-01)`;
       await ui.update(`Searching rental requests from ${year}-01-01 to today…`);
       const rentalResult = await this.registry.execute(
         "search.execute",
@@ -655,19 +655,16 @@ export class CopilotOrchestrator {
     } // end if (this.customerSearchState)
 
     if (looksLikeGlobalRequestQuery) {
-      const range = {
-        ge: `${new Date().getFullYear()}-01-01T00:00:00`,
-        lt: new Date().toISOString(),
-      };
-      await ui.update(
-        `Searching rental requests from ${range.ge.slice(0, 10)} to today…`,
-      );
+      const pad = (n) => String(n).padStart(2, "0");
+      const now = new Date();
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      await ui.update(`Searching rental requests from ${from} to today…`);
 
       const rentalResult = await this.registry.execute(
         "search.execute",
         {
           type: "RENTAL",
-          filterQuery: `RequestedOn ge ${range.ge} and RequestedOn lt ${range.lt}`,
+          filterQuery: `date(RequestedOn) ge date(${from}) and date(RequestedOn) le date(${today})`,
           topCount: 50,
         },
         context,

@@ -1,9 +1,14 @@
+function ymd(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function getNow() {
   const now = new Date();
   return {
     now,
     iso: now.toISOString(),
-    ymd: now.toISOString().slice(0, 10),
+    ymd: ymd(now),
     year: now.getFullYear(),
     local: now.toLocaleString("en-US", {
       timeZone: "America/Chicago",
@@ -14,17 +19,15 @@ export function getNow() {
       hour: "numeric",
       minute: "2-digit",
     }),
-    monthAgo: new Date(now.getTime() - 30 * 86400000)
-      .toISOString()
-      .slice(0, 10),
+    monthAgo: ymd(new Date(now.getTime() - 30 * 86400000)),
   };
 }
 
 export function resolveDateRange(userInput) {
   const text = String(userInput || "").toLowerCase();
   const now = new Date();
-  const end = now.toISOString();
-  const daysAgo = (n) => new Date(now.getTime() - n * 86400000).toISOString();
+  const end = ymd(now);
+  const daysAgo = (n) => ymd(new Date(now.getTime() - n * 86400000));
 
   if (/past month|last month|last 30|past mo/.test(text)) {
     return { ge: daysAgo(30), lt: end };
@@ -32,11 +35,11 @@ export function resolveDateRange(userInput) {
   if (/past quarter|last quarter/.test(text)) {
     return { ge: daysAgo(90), lt: end };
   }
-  if (/this year|started this year/.test(text)) {
-    return { ge: `${now.getUTCFullYear()}-01-01T00:00:00`, lt: end };
+  if (/this year|started this year|how many/.test(text)) {
+    return { ge: `${now.getFullYear()}-01-01`, lt: end };
   }
   if (/\btoday\b/.test(text)) {
-    return { ge: `${now.toISOString().slice(0, 10)}T00:00:00`, lt: end };
+    return { ge: end, lt: end };
   }
   return null;
 }
@@ -49,20 +52,17 @@ export function applyDateFilter(userInput, args = {}) {
   const type = String(next.type || "").toUpperCase();
   if (type !== "RENTAL") return next;
 
-  const field = "RequestedOn";
-  const dateClause = `${field} ge ${range.ge} and ${field} lt ${range.lt}`;
-
-  if (next.filterQuery && /2023|2024/.test(next.filterQuery)) {
-    next.filterQuery = next.filterQuery.replace(
-      /20(23|24)-\d{2}-\d{2}[^'\s]*/g,
-      range.ge,
-    );
-  }
+  const dateClause = `date(RequestedOn) ge date(${range.ge})`;
 
   if (!next.filterQuery) {
     next.filterQuery = dateClause;
-  } else if (!/RequestedOn|createdon|RequestDate/i.test(next.filterQuery)) {
+  } else if (!/RequestedOn/i.test(next.filterQuery)) {
     next.filterQuery = `(${next.filterQuery}) and ${dateClause}`;
+  } else {
+    next.filterQuery = next.filterQuery
+      .replace(/CreatedOn/gi, "RequestedOn")
+      .replace(/datetime'[^']+'/g, `date(${range.ge})`)
+      .replace(/\d{4}-\d{2}-\d{2}T[^'\s]+/g, range.ge);
   }
 
   return next;
@@ -72,11 +72,10 @@ export function currentTimePromptBlock() {
   const t = getNow();
   return `
 ### Current date and time
-- UTC: ${t.iso}
 - Central Time: ${t.local}
 - Current year: ${t.year}
 - Today: ${t.ymd}
-- Never use 2023 or 2024.
-- "past month" → ${t.monthAgo} through ${t.ymd}
+- Date filters must use: date(RequestedOn) ge date(YYYY-MM-DD)
+- Never use 2023/2024 or a Z suffix.
 `.trim();
 }
