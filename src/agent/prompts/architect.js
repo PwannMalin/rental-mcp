@@ -49,14 +49,19 @@ Given the current file content and a fix instruction, return ONLY JSON:
 {
   "replacements": [
     {
-      "old": "exact substring from the file (must match uniquely)",
-      "new": "replacement text"
+      "old": "if (/past month/",
+      "new": ""if (/last month|previous month/" }"
     }
   ],
   "notes": "short note"
 }
 
 Rules:
+
+- 1 or 2 replacements
+- old must be copied verbatim from SOURCE
+- each old/new under 400 characters
+- do not rewrite the whole file
 - "new" MUST differ from "old"
 - Implement the required fix; do not return identical strings
 - old must appear EXACTLY once in the file (copy verbatim from the provided source)
