@@ -25,8 +25,6 @@ const FILE_ALIASES = {
   "src/agent/rentalRequestQuery.js": "src/agent/requestFlow.js",
 };
 
-const { registry } = createRegistry({});
-
 function parseArgs(argv) {
   const out = {};
   for (const a of argv) {
@@ -54,31 +52,6 @@ function applyReplacements(content, replacements) {
     next = next.replace(oldStr, newStr);
   }
   return next;
-}
-
-const q = [
-  row.critique?.summary,
-  ...(row.critique?.targetAreas || []),
-  ...(row.critique?.requiredFixes || []),
-]
-  .filter(Boolean)
-  .join(" ")
-  .slice(0, 200);
-
-let searchHits = [];
-try {
-  const found = await registry.execute("github.searchRepo", {
-    owner: OWNER,
-    repo: REPO,
-    query: q || "RequestedOn dateFilters",
-  });
-  searchHits = found?.data || found || [];
-  console.log(
-    "Explorer hits:",
-    JSON.stringify(searchHits, null, 2).slice(0, 1500),
-  );
-} catch (err) {
-  console.warn("searchRepo failed:", err.message);
 }
 
 function isAllowedPath(p) {
@@ -138,6 +111,32 @@ async function main() {
   console.log(
     `Architect: fp=${row.fingerprint} action=${row.action} severity=${row.critique?.severity}`,
   );
+  const { registry } = createRegistry({});
+
+  const q = [
+    row.critique?.summary,
+    ...(row.critique?.targetAreas || []),
+    ...(row.critique?.requiredFixes || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 200);
+
+  let searchHits = [];
+  try {
+    const found = await registry.execute("github.searchRepo", {
+      owner: OWNER,
+      repo: REPO,
+      query: q || "RequestedOn dateFilters",
+    });
+    searchHits = found?.data || found || [];
+    console.log(
+      "Explorer hits:",
+      JSON.stringify(searchHits, null, 2).slice(0, 1500),
+    );
+  } catch (err) {
+    console.warn("searchRepo failed:", err.message);
+  }
 
   const llm = createAzureOpenAI();
   const planRaw = await runAgent({
@@ -200,8 +199,6 @@ async function main() {
 
   const branchName =
     plan.branchName || `fix/critic-${String(row.fingerprint).slice(0, 10)}`;
-
-  const { registry } = createRegistry({});
 
   // 1) Create branch from base
   console.log(`Creating branch ${branchName} from ${BASE}...`);
