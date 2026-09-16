@@ -184,17 +184,32 @@ async function main() {
     "src/jobs/architectPR.js",
   ]);
 
-  plan.files = (plan.files || plan.filesToModify || [])
-    .map((f) => (typeof f === "string" ? { path: f } : f))
+  let filesToPatch = (plan.files || plan.filesToModify || [])
+    .map((f) =>
+      typeof f === "string" ? { path: f, instruction: plan.prTitle } : f,
+    )
     .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
-    .filter((f) => allowed.has(f.path));
+    .filter((f) => f?.path && (allowed.has(f.path) || isAllowedPath(f.path)));
 
-  const files = (plan.files || [])
-    .map((f) => ({ ...f, path: FILE_ALIASES[f.path] || f.path }))
-    .filter((f) => isAllowedPath(f.path));
+  if (
+    !filesToPatch.length &&
+    /date|month|year|RequestedOn/i.test(
+      `${row.critique?.summary || ""} ${(row.critique?.targetAreas || []).join(" ")}`,
+    )
+  ) {
+    filesToPatch = [
+      {
+        path: "src/agent/dateFilters.js",
+        instruction:
+          "Adjust resolveDateRange and applyDateFilter only. Use date(RequestedOn) ge date(YYYY-MM-DD). Last month = previous calendar month, not 'this month'.",
+      },
+    ];
+  }
 
-  if (!files.length) {
+  if (!filesToPatch.length) {
     console.log("No allowlisted files in plan — docs PR only");
+  } else {
+    console.log("Files to patch:", filesToPatch.map((f) => f.path).join(", "));
   }
 
   const branchName =
@@ -223,13 +238,6 @@ async function main() {
   if (!branchResult?.success) {
     throw new Error(branchResult?.error || "createBranch failed");
   }
-
-  const filesToPatch = (plan.files || [])
-    .map((f) => ({
-      ...f,
-      path: FILE_ALIASES[f.path] || f.path,
-    }))
-    .filter((f) => isAllowedPath(f.path));
 
   const patchedPaths = [];
 
@@ -293,7 +301,7 @@ async function main() {
     const replacements = patchPlan.replacements || [];
     const tooBig = replacements.some(
       (r) =>
-        String(r.old || "").length > 800 || String(r.new || "").length > 1200,
+        String(r.old || "").length > 2000 || String(r.new || "").length > 2000,
     );
 
     if (!replacements.length || tooBig) {
