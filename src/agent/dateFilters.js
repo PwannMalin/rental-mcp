@@ -28,7 +28,13 @@ export function resolveDateRange(userInput) {
   const now = new Date();
   const end = ymd(now);
   const daysAgo = (n) => ymd(new Date(now.getTime() - n * 86400000));
-
+  if (/last week|past week|past 7|last 7/.test(text)) {
+    return {
+      ge: daysAgo(7),
+      lt: ymd(now),
+      label: `the last 7 days (${daysAgo(7)} through ${ymd(now)})`,
+    };
+  }
   if (/past month|last month|last 30|past mo/.test(text)) {
     return { ge: daysAgo(30), lt: end };
   }
@@ -38,6 +44,7 @@ export function resolveDateRange(userInput) {
   if (/this year|started this year|how many/.test(text)) {
     return { ge: `${now.getFullYear()}-01-01`, lt: end };
   }
+
   if (/\btoday\b/.test(text)) {
     return { ge: end, lt: end };
   }

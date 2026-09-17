@@ -205,7 +205,18 @@ async function main() {
       },
     ];
   }
-
+  if (
+    !filesToPatch.length &&
+    /week|month|year|RequestedOn|date range/i.test(row.critique?.summary || "")
+  ) {
+    filesToPatch = [
+      {
+        path: "src/agent/dateFilters.js",
+        instruction:
+          "Add or fix resolveDateRange for last week (7 days), last month (previous calendar month), this year. applyDateFilter must emit date(RequestedOn) ge date(YYYY-MM-DD).",
+      },
+    ];
+  }
   if (!filesToPatch.length) {
     console.log("No allowlisted files in plan — docs PR only");
   } else {

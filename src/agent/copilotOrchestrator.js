@@ -217,7 +217,7 @@ export class CopilotOrchestrator {
     ) {
       const now = new Date();
       const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, "0");
       const fromDate = `${year}-${month}-01`;
       const rentalResult = await this.registry.execute(
         "search.execute",
@@ -232,7 +232,7 @@ export class CopilotOrchestrator {
       return {
         success: true,
         answer: rows.length
-          ? `Found ${rows.length} rental request(s) so far this month (showing up to 50).`
+          ? `Found ${rows.length} rental request(s) so far ${range.label} (showing up to 50).`
           : `No rental requests found from ${fromDate} through today.`,
       };
     }
@@ -243,9 +243,9 @@ export class CopilotOrchestrator {
     if (looksLikeGlobalRequestQuery) {
       const now = new Date();
       const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, "0");
       const fromDate = `${year}-${month}-01`;
-      const today = `${year}-${month}-${String(now.getDate()).padStart(2, '0')}`;
+      const today = `${year}-${month}-${String(now.getDate()).padStart(2, "0")}`;
       await ui.update(`Searching rental requests from ${fromDate} to today…`);
       const filterQuery = `date(RequestedOn) ge date(${fromDate}) and date(RequestedOn) le date(${today})`;
       const rentalResult = await this.registry.execute(
@@ -257,7 +257,7 @@ export class CopilotOrchestrator {
       return {
         success: true,
         answer: rows.length
-          ? `Found ${rows.length} rental request(s) so far this month (showing up to 50).`
+          ? `Found ${rows.length} rental request(s) so far ${range.label} (showing up to 50).`
           : `No rental requests found from ${fromDate} through today. I searched RequestHeader by RequestedOn.`,
       };
     }
