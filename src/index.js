@@ -10,7 +10,6 @@ import { CopilotOrchestrator } from "./agent/copilotOrchestrator.js";
 import { createAzureOpenAI } from "./llm/azureOpenAI.js";
 import { MemoryStore } from "./memory/memoryStore.js";
 import { createTeamsUI } from "./ui/createTeamsUI.js";
-import { PublicClientApplication } from "@azure/msal-browser";
 
 import { runCritic } from "./agent/runCritic.js";
 import { logCritique } from "./agent/critiqueStore.js";
@@ -92,7 +91,13 @@ async function bootstrap() {
     const copilot = new CopilotOrchestrator({ registry, llm, memory });
 
     const app = express();
-
+    app.use((req, res, next) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      if (req.method === "OPTIONS") return res.sendStatus(204);
+      next();
+    });
     app.use(express.static("public"));
     app.use(
       express.json({
@@ -176,22 +181,39 @@ async function bootstrap() {
           headers: { Authorization: `Bearer ${tokens.access_token}` },
         });
         const me = await meRes.json();
+        const email = me.mail || me.userPrincipalName || "";
+        const name = me.displayName || "";
+        const id = me.id || "";
 
-        loginResults.set(String(state || me.id), {
+        loginResults.set(String(state || id), {
+          success: true,
           at: Date.now(),
-          id: me.id,
-          email: me.mail || me.userPrincipalName,
-          name: me.displayName,
+          id,
+          email,
+          name,
+          state: String(state || ""),
         });
 
-        console.log("LF LOGIN", state, me.mail || me.userPrincipalName);
+        console.log("LF LOGIN", state, email);
 
         res.send(`<!DOCTYPE html>
 <html><body style="font-family:Arial;padding:24px;">
-  <p>Signed in as <strong>${me.displayName || ""}</strong></p>
-  <p>${me.mail || me.userPrincipalName || ""}</p>
+  <p>Signed in as <strong>${name}</strong></p>
+  <p>${email}</p>
   <p>You can close this window.</p>
-  <script>window.close();</script>
+  <script>
+    var payload = {
+      source: "malin-login",
+      state: ${JSON.stringify(String(state || ""))},
+      email: ${JSON.stringify(email)},
+      name: ${JSON.stringify(name)},
+      id: ${JSON.stringify(id)}
+    };
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(payload, "*");
+    }
+    setTimeout(function () { window.close(); }, 400);
+  </script>
 </body></html>`);
       } catch (err) {
         console.error("CALLBACK ERROR", err);
