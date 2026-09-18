@@ -15,7 +15,10 @@ import { PublicClientApplication } from "@azure/msal-browser";
 import { runCritic } from "./agent/runCritic.js";
 import { logCritique } from "./agent/critiqueStore.js";
 import { logChatTurn } from "./agent/chatLog.js";
-import { spawnCriticBatch, spawnCriticPipeline } from "./jobs/runCriticBatchSpawn.js";
+import {
+  spawnCriticBatch,
+  spawnCriticPipeline,
+} from "./jobs/runCriticBatchSpawn.js";
 
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
@@ -27,6 +30,7 @@ const RENTAL_FOLDER_ID = Number(
   process.env.RENTAL_FOLDER_ID || process.env.RENTALFOLDERID || 67,
 );
 const PORT = process.env.PORT || 8080;
+const loginResults = new Map(); // POC only; use SQL later
 
 // ======================
 // DEBUG AUTH
@@ -126,6 +130,79 @@ async function bootstrap() {
         count: tools.length,
         tools,
       });
+    });
+
+    app.get("/callback", async (req, res) => {
+      const { code, state, error, error_description } = req.query;
+
+      if (error) {
+        return res
+          .status(400)
+          .send(
+            `<p>Login failed: ${error}</p><p>${error_description || ""}</p>`,
+          );
+      }
+
+      if (!code) {
+        return res.status(400).send("<p>Missing code. Close this window.</p>");
+      }
+
+      try {
+        const tokenRes = await fetch(
+          `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/v2.0/token`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_id: process.env.CLIENT_ID,
+              client_secret: process.env.CLIENT_SECRET,
+              grant_type: "authorization_code",
+              code: String(code),
+              redirect_uri: process.env.REDIRECT_URI,
+              scope: "openid profile email User.Read",
+            }),
+          },
+        );
+
+        const tokens = await tokenRes.json();
+        if (!tokenRes.ok) {
+          console.error("TOKEN ERROR", tokens);
+          return res
+            .status(400)
+            .send(`<pre>${JSON.stringify(tokens, null, 2)}</pre>`);
+        }
+
+        const meRes = await fetch("https://graph.microsoft.com/v1.0/me", {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        const me = await meRes.json();
+
+        loginResults.set(String(state || me.id), {
+          at: Date.now(),
+          id: me.id,
+          email: me.mail || me.userPrincipalName,
+          name: me.displayName,
+        });
+
+        console.log("LF LOGIN", state, me.mail || me.userPrincipalName);
+
+        res.send(`<!DOCTYPE html>
+<html><body style="font-family:Arial;padding:24px;">
+  <p>Signed in as <strong>${me.displayName || ""}</strong></p>
+  <p>${me.mail || me.userPrincipalName || ""}</p>
+  <p>You can close this window.</p>
+  <script>window.close();</script>
+</body></html>`);
+      } catch (err) {
+        console.error("CALLBACK ERROR", err);
+        res.status(500).send(`<p>${err.message}</p>`);
+      }
+    });
+
+    app.get("/login-result", (req, res) => {
+      const row = loginResults.get(String(req.query.state || ""));
+      if (!row) return res.status(404).json({ success: false });
+      res.json({ success: true, ...row });
     });
 
     app.get("/test/github/list-branches", async (req, res) => {
@@ -281,55 +358,56 @@ async function bootstrap() {
     });
 
     app.get("/admin/llm-ping", async (req, res) => {
-  try {
-    const r = await llm.chat.completions.create({
-      messages: [{ role: "user", content: "Reply with OK" }],
-      max_tokens: 10,
-    });
-    res.json({
-      success: true,
-      content: r.choices?.[0]?.message?.content,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-    app.post("/admin/critic",  async (req, res) => {
-  try {
-    const { userInput, draftAnswer, toolSummary, sessionHints } = req.body || {};
-
-    if (!userInput || !draftAnswer) {
-      return res.status(400).json({
-        success: false,
-        error: "userInput and draftAnswer are required",
-      });
-    }
-
-    const critique = await runCritic({
-      llm, // same createAzureOpenAI() instance you use for the orchestrator
-      userInput,
-      draftAnswer,
-      toolSummary: toolSummary || null,
-      sessionHints: sessionHints || null,
+      try {
+        const r = await llm.chat.completions.create({
+          messages: [{ role: "user", content: "Reply with OK" }],
+          max_tokens: 10,
+        });
+        res.json({
+          success: true,
+          content: r.choices?.[0]?.message?.content,
+        });
+      } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+      }
     });
 
-    await logCritique({
-  userInput,
-  draftAnswer,
-  toolSummary: toolSummary || null,
-  sessionHints: sessionHints || null,
-  critique,
-});
+    app.post("/admin/critic", async (req, res) => {
+      try {
+        const { userInput, draftAnswer, toolSummary, sessionHints } =
+          req.body || {};
 
-res.json({ success: true, critique });
+        if (!userInput || !draftAnswer) {
+          return res.status(400).json({
+            success: false,
+            error: "userInput and draftAnswer are required",
+          });
+        }
 
-    res.json({ success: true, critique });
-  } catch (err) {
-    console.error("CRITIC ERROR", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+        const critique = await runCritic({
+          llm, // same createAzureOpenAI() instance you use for the orchestrator
+          userInput,
+          draftAnswer,
+          toolSummary: toolSummary || null,
+          sessionHints: sessionHints || null,
+        });
+
+        await logCritique({
+          userInput,
+          draftAnswer,
+          toolSummary: toolSummary || null,
+          sessionHints: sessionHints || null,
+          critique,
+        });
+
+        res.json({ success: true, critique });
+
+        res.json({ success: true, critique });
+      } catch (err) {
+        console.error("CRITIC ERROR", err);
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
 
     app.get("/test/request-lines", async (req, res) => {
       const tool = toolSource["search.execute"];
@@ -353,78 +431,80 @@ res.json({ success: true, critique });
       res.json(result);
     });
 
-   app.post("/chat", async (req, res) => {
-  const message = (req.body.message || "").trim();
+    app.post("/chat", async (req, res) => {
+      const message = (req.body.message || "").trim();
 
-  // Admin: critic only
-  if (/^\/critic\b/i.test(message) || /^run critic$/i.test(message)) {
-    spawnCriticBatch();
-    return res.json({
-      success: true,
-      answer: "Critic batch started. Check logs/critiques.jsonl in a minute.",
-    });
-  }
-
-  // Optional: full pipeline (draft PRs possible)
-  if (/^\/pipeline\b/i.test(message) || /^run pipeline$/i.test(message)) {
-    spawnCriticPipeline();
-    return res.json({
-      success: true,
-      answer: "Full critic pipeline started (critic → notify → architect). Check GitHub for draft PRs.",
-    });
-  }
-
-  try {
-    const result = await copilot.runStreaming(
-      message,
-      {
-        userId: req.body.userId,
-        tenantId: req.body.tenantId,
-      },
-      {
-        typing: async () => {},
-        update: async () => {},
-        sendFinal: async () => {},
+      // Admin: critic only
+      if (/^\/critic\b/i.test(message) || /^run critic$/i.test(message)) {
+        spawnCriticBatch();
+        return res.json({
+          success: true,
+          answer:
+            "Critic batch started. Check logs/critiques.jsonl in a minute.",
+        });
       }
-    );
 
-    await logChatTurn({
-      source: "web",
-      userId: req.body.userId,
-      tenantId: req.body.tenantId,
-      userInput: message,
-      answer: result.answer,
-      success: true,
-      showPagination: !!result.showPagination,
-      awaitingCustomerSelection: !!result.awaitingCustomerSelection,
-    });
+      // Optional: full pipeline (draft PRs possible)
+      if (/^\/pipeline\b/i.test(message) || /^run pipeline$/i.test(message)) {
+        spawnCriticPipeline();
+        return res.json({
+          success: true,
+          answer:
+            "Full critic pipeline started (critic → notify → architect). Check GitHub for draft PRs.",
+        });
+      }
 
-    res.json({
-      success: true,
-      answer: result.answer,
-      showPagination: !!result.showPagination,
-      awaitingCustomerSelection: !!result.awaitingCustomerSelection,
-    });
-  } catch (err) {
-    console.error("CHAT ERROR", err);
+      try {
+        const result = await copilot.runStreaming(
+          message,
+          {
+            userId: req.body.userId,
+            tenantId: req.body.tenantId,
+          },
+          {
+            typing: async () => {},
+            update: async () => {},
+            sendFinal: async () => {},
+          },
+        );
 
-    await logChatTurn({
-      source: "web",
-      userId: req.body?.userId,
-      tenantId: req.body?.tenantId,
-      userInput: message,
-      answer: "",
-      success: false,
-      error: err.message,
-    });
+        await logChatTurn({
+          source: "web",
+          userId: req.body.userId,
+          tenantId: req.body.tenantId,
+          userInput: message,
+          answer: result.answer,
+          success: true,
+          showPagination: !!result.showPagination,
+          awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+        });
 
-    res.status(500).json({
-      success: false,
-      error: err.message,
-      stack: err.stack,
+        res.json({
+          success: true,
+          answer: result.answer,
+          showPagination: !!result.showPagination,
+          awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+        });
+      } catch (err) {
+        console.error("CHAT ERROR", err);
+
+        await logChatTurn({
+          source: "web",
+          userId: req.body?.userId,
+          tenantId: req.body?.tenantId,
+          userInput: message,
+          answer: "",
+          success: false,
+          error: err.message,
+        });
+
+        res.status(500).json({
+          success: false,
+          error: err.message,
+          stack: err.stack,
+        });
+      }
     });
-  }
-});
 
     // MCP endpoint (keep your existing one)
 
@@ -440,68 +520,68 @@ res.json({ success: true, critique });
       await context.sendActivity("Sorry, something went wrong.");
     };
 
-  app.post("/api/messages", async (req, res) => {
-  console.log("📥 Request received at /api/messages");
-
-  try {
-    await adapter.process(req, res, async (turnContext) => {
-      if (turnContext.activity.type !== "message") {
-        console.log("Not a message activity");
-        return;
-      }
-
-      const text = (turnContext.activity.text || "").trim();
-      console.log("🔥 MESSAGE:", text);
-
-      const userId = turnContext.activity.from?.id;
-      const tenantId = turnContext.activity.conversation?.tenantId;
-
-      const ui = createTeamsUI(turnContext);
-      console.log("▶️ Calling copilot.runStreaming");
+    app.post("/api/messages", async (req, res) => {
+      console.log("📥 Request received at /api/messages");
 
       try {
-        const result = await copilot.runStreaming(
-          text,
-          { userId, tenantId },
-          ui
-        );
+        await adapter.process(req, res, async (turnContext) => {
+          if (turnContext.activity.type !== "message") {
+            console.log("Not a message activity");
+            return;
+          }
 
-        console.log("✅ Copilot returned:", result);
+          const text = (turnContext.activity.text || "").trim();
+          console.log("🔥 MESSAGE:", text);
 
-        await logChatTurn({
-          source: "teams",
-          userId,
-          tenantId,
-          userInput: text,
-          answer: result.answer,
-          success: true,
-          showPagination: !!result.showPagination,
-          awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+          const userId = turnContext.activity.from?.id;
+          const tenantId = turnContext.activity.conversation?.tenantId;
+
+          const ui = createTeamsUI(turnContext);
+          console.log("▶️ Calling copilot.runStreaming");
+
+          try {
+            const result = await copilot.runStreaming(
+              text,
+              { userId, tenantId },
+              ui,
+            );
+
+            console.log("✅ Copilot returned:", result);
+
+            await logChatTurn({
+              source: "teams",
+              userId,
+              tenantId,
+              userInput: text,
+              answer: result.answer,
+              success: true,
+              showPagination: !!result.showPagination,
+              awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+            });
+
+            await ui.sendFinal(result.answer || "I received your message.");
+          } catch (err) {
+            console.error("❌ Copilot error:", err.message);
+
+            await logChatTurn({
+              source: "teams",
+              userId,
+              tenantId,
+              userInput: text,
+              answer: "",
+              success: false,
+              error: err.message,
+            });
+
+            await turnContext.sendActivity(
+              "Sorry, I had trouble with that request.",
+            );
+          }
         });
-
-        await ui.sendFinal(result.answer || "I received your message.");
       } catch (err) {
-        console.error("❌ Copilot error:", err.message);
-
-        await logChatTurn({
-          source: "teams",
-          userId,
-          tenantId,
-          userInput: text,
-          answer: "",
-          success: false,
-          error: err.message,
-        });
-
-        await turnContext.sendActivity(
-          "Sorry, I had trouble with that request."
-        );
+        console.error("💥 Critical handler error:", err.message);
       }
     });
-  } catch (err) {
-    console.error("💥 Critical handler error:", err.message);
-  }
-});
 
     app.listen(PORT, () => {
       console.log(`🚀 MCP Server running on port ${PORT}`);
