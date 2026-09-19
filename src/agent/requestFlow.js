@@ -216,7 +216,7 @@ export async function tryResolvePendingRequestAction(
     "search.execute",
     {
       type: "REQUEST_LINES",
-      filterQuery: `RequestID eq ${orchestrator.activeRequest.RequestID}`,
+      filterQuery: `RequestID eq ${orchestrator.activeRequest.RequestID} and RequestDate ge ${orchestrator.dateFilters.lastQuarter.start.toISOString()} and RequestDate le ${orchestrator.dateFilters.lastQuarter.end.toISOString()}`,
       topCount: 50,
     },
     context,
