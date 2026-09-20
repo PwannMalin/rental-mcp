@@ -23,7 +23,7 @@ export async function searchCustomersFromText(
     "search.execute",
     {
       type: "CUSTOMER",
-      filterQuery: `contains(CustomerName,'${safe}')`,
+      filterQuery: `CustomerName eq '${safe}'`,
       topCount: 50,
     },
     context,
@@ -33,7 +33,7 @@ export async function searchCustomersFromText(
   if (!customerRows.length) {
     return {
       success: true,
-      answer: `I couldn't find any customers matching '${userInput}'. Please try a different search term.`,
+      answer: `I searched for customers named '${userInput}' but found none. Please try a different name.`,
     };
   }
 
