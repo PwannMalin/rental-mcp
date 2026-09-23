@@ -23,7 +23,7 @@ export async function searchCustomersFromText(
     "search.execute",
     {
       type: "CUSTOMER",
-      filterQuery: `CustomerName eq '${safe}'`,
+      filterQuery: `contains(CustomerName,'${safe}')`,
       topCount: 50,
     },
     context,
