@@ -36,7 +36,7 @@ export function resolveDateRange(userInput) {
     };
   }
   if (/past month|last month|last 30|past mo/.test(text)) {
-    return { ge: daysAgo(30), lt: end };
+    return { ge: `${now.getFullYear()}-01-01`, lt: end };
   }
   if (/past quarter|last quarter/.test(text)) {
     return { ge: daysAgo(90), lt: end };
