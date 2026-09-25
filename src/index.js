@@ -19,7 +19,6 @@ import {
   spawnCriticPipeline,
 } from "./jobs/runCriticBatchSpawn.js";
 
-import express from "express";
 const app = express();
 
 console.log("🔥 ENTRY FILE LOADED");
