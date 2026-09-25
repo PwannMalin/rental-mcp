@@ -19,6 +19,9 @@ import {
   spawnCriticPipeline,
 } from "./jobs/runCriticBatchSpawn.js";
 
+import express from "express";
+const app = express();
+
 console.log("🔥 ENTRY FILE LOADED");
 console.log("PA_SEARCH_USER_URL loaded?", !!process.env.PA_SEARCH_USER_URL);
 // ======================
@@ -90,7 +93,6 @@ async function bootstrap() {
 
     const copilot = new CopilotOrchestrator({ registry, llm, memory });
 
-    const app = express();
     app.use((req, res, next) => {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -226,6 +228,30 @@ async function bootstrap() {
       if (!row) return res.status(404).json({ success: false });
       res.json({ success: true, ...row });
     });
+
+    app.get("/photo", async (req, res) => {
+      const upn = req.query.upn;
+      const token = req.headers.authorization;
+      if (!upn || !token)
+        return res
+          .status(400)
+          .json({ error: "upn and Authorization required" });
+
+      const g = await fetch(
+        "https://graph.microsoft.com/v1.0/users/" +
+          encodeURIComponent(upn) +
+          "/photos/48x48/$value",
+        { headers: { Authorization: token } },
+      );
+
+      if (g.status === 404) return res.json({ base64: "" });
+      if (!g.ok) return res.status(g.status).json({ error: await g.text() });
+
+      const buf = Buffer.from(await g.arrayBuffer());
+      res.json({ base64: buf.toString("base64") });
+    });
+
+    app.listen(process.env.PORT || 8080);
 
     app.get("/test/github/list-branches", async (req, res) => {
       try {
