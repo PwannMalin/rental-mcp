@@ -230,28 +230,42 @@ async function bootstrap() {
     });
 
     app.get("/photo", async (req, res) => {
-      const upn = req.query.upn;
-      const token = req.headers.authorization;
-      if (!upn || !token)
-        return res
-          .status(400)
-          .json({ error: "upn and Authorization required" });
+      try {
+        const upn = req.query.upn;
+        if (!upn) return res.status(400).json({ error: "upn required" });
 
-      const g = await fetch(
-        "https://graph.microsoft.com/v1.0/users/" +
-          encodeURIComponent(upn) +
-          "/photos/48x48/$value",
-        { headers: { Authorization: token } },
-      );
+        const tokenRes = await fetch(
+          `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/v2.0/token`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_id: process.env.CLIENT_ID,
+              client_secret: process.env.CLIENT_SECRET,
+              grant_type: "client_credentials",
+              scope: "https://graph.microsoft.com/.default",
+            }),
+          },
+        );
+        const tokens = await tokenRes.json();
+        if (!tokenRes.ok) return res.status(tokenRes.status).json(tokens);
 
-      if (g.status === 404) return res.json({ base64: "" });
-      if (!g.ok) return res.status(g.status).json({ error: await g.text() });
+        const g = await fetch(
+          "https://graph.microsoft.com/v1.0/users/" +
+            encodeURIComponent(upn) +
+            "/photos/48x48/$value",
+          { headers: { Authorization: "Bearer " + tokens.access_token } },
+        );
 
-      const buf = Buffer.from(await g.arrayBuffer());
-      res.json({ base64: buf.toString("base64") });
+        if (g.status === 404) return res.json({ base64: "" });
+        if (!g.ok) return res.status(g.status).json({ error: await g.text() });
+
+        const buf = Buffer.from(await g.arrayBuffer());
+        res.json({ base64: buf.toString("base64") });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
     });
-
-    app.listen(process.env.PORT || 8080);
 
     app.get("/test/github/list-branches", async (req, res) => {
       try {
