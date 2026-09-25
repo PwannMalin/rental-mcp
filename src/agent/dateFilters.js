@@ -42,7 +42,8 @@ export function resolveDateRange(userInput) {
     return { ge: daysAgo(90), lt: end };
   }
   if (/this year|started this year|how many/.test(text)) {
-    return { ge: `${now.getFullYear()}-01-01`, lt: end };
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    return { ge: ymd(startOfYear), lt: end };
   }
 
   if (/\btoday\b/.test(text)) {
