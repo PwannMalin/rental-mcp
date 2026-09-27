@@ -1,13 +1,41 @@
+function extractCustomerSearchTerm(userText) {
+  const text = String(userText || "").trim();
+  if (!text) return "";
+
+  const stripped = text
+    .replace(/^(can you |could you |please |hey |hi )+/i, "")
+    .replace(/\b(find|look up|lookup|search for|show|get|list)\b/gi, " ")
+    .replace(/\b(requests?|rentals?|open requests?|rental requests?)\b/gi, " ")
+    .replace(/\b(for|from|named|called|customer|customers|the|a|an)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return stripped;
+}
+
 export function looksLikeCustomerSearch(userText) {
   const text = String(userText || "").toLowerCase();
+
+  // Metrics / date questions are not a customer directory search
   if (
-    /request|this year|past month|how many|what date|what time|what year/.test(
+    /\b(how many|what date|what time|what year|this year|past month)\b/.test(
       text,
     )
   ) {
     return false;
   }
-  return /customer|find |look up|lookup|search for/.test(text);
+
+  // "find requests for clampitt paper" IS a customer search
+  // (name first, then requests by CustomerNumber)
+  if (/\b(customer|customers|find|look up|lookup|search for)\b/.test(text)) {
+    return Boolean(extractCustomerSearchTerm(userText));
+  }
+
+  return false;
+}
+
+export function wantsRequestCheck(userText) {
+  return /\b(request|requests|rental|rentals)\b/i.test(String(userText || ""));
 }
 
 export async function searchCustomersFromText(
@@ -16,28 +44,53 @@ export async function searchCustomersFromText(
   context,
   ui,
 ) {
-  await ui.update(`Searching for customers matching your input...`);
+  const searchTerm =
+    extractCustomerSearchTerm(userInput) || String(userInput || "").trim();
+  const safe = searchTerm.replace(/'/g, "''");
+  const checkRequests = wantsRequestCheck(userInput);
 
-  const safe = String(userInput || "").replace(/'/g, "''");
-  const customerResult = await orchestrator.registry.execute(
-    "search.execute",
-    {
-      type: "CUSTOMER",
-      filterQuery: `contains(CustomerName,'${safe}')`,
-      topCount: 50,
-    },
-    context,
+  await ui.update(
+    `Searching for customers matching '${searchTerm}' with contains(CustomerName,'${safe}')…`,
   );
 
-  const customerRows = orchestrator.getRowsFromToolResult(customerResult);
-  if (!customerRows.length) {
+  const pageSize = 50;
+  let skip = 0;
+  let allRows = [];
+  let hitLimit = false;
+
+  // Page the customer directory until exhausted or a hard cap
+  const maxPages = 10;
+  for (let page = 0; page < maxPages; page += 1) {
+    const customerResult = await orchestrator.registry.execute(
+      "search.execute",
+      {
+        type: "CUSTOMER",
+        filterQuery: `contains(CustomerName,'${safe}')`,
+        topCount: pageSize,
+        skipCount: skip,
+      },
+      context,
+    );
+
+    const rows = orchestrator.getRowsFromToolResult(customerResult);
+    allRows = allRows.concat(rows);
+
+    if (rows.length < pageSize) {
+      hitLimit = false;
+      break;
+    }
+    hitLimit = true;
+    skip += pageSize;
+  }
+
+  if (!allRows.length) {
     return {
       success: true,
-      answer: `I searched for customers named '${userInput}' but found none. Please try a different name.`,
+      answer: `I searched customers with contains(CustomerName,'${safe}') and found none. Please try a different name.`,
     };
   }
 
-  const customers = customerRows.map((row) => ({
+  const customers = allRows.map((row) => ({
     CustomerNumber: orchestrator.getCleanValue(
       row.CustomerNumber || row.customerNumber,
     ),
@@ -53,25 +106,57 @@ export async function searchCustomersFromText(
     filtered: customers,
     page: 0,
     pageSize: 25,
-    searchTerm: userInput,
+    searchTerm,
     filterQuery: `contains(CustomerName,'${safe}')`,
     onlyWithRequests: false,
-    hitLimit: customers.length >= 50,
-    currentTopCount: 50,
-    checkRequests: false,
+    hitLimit,
+    currentTopCount: allRows.length,
+    checkRequests,
   };
+
+  if (checkRequests) {
+    const enriched = await enrichPageWithRequests(
+      orchestrator,
+      orchestrator.customerSearchState,
+      context,
+      ui,
+    );
+    const pageResult = formatRequestPage(
+      enriched,
+      orchestrator.customerSearchState,
+    );
+    orchestrator.pendingCustomerSelection = pageResult.withRequests.length
+      ? { options: pageResult.withRequests }
+      : { options: customers };
+
+    await orchestrator.saveSessionState(orchestrator.getSessionKey(context));
+
+    const extra = hitLimit
+      ? `\n\nNote: the directory returned a full page set; say Next if you need more accounts.`
+      : "";
+
+    return {
+      success: true,
+      answer: pageResult.answer + extra,
+      showPagination: pageResult.showPagination,
+      awaitingCustomerSelection: true,
+      options: orchestrator.pendingCustomerSelection.options,
+    };
+  }
 
   orchestrator.pendingCustomerSelection = { options: customers };
 
-  const { lines, nav } = orchestrator.formatCustomerPage(
-    orchestrator.customerSearchState,
-  );
+  const { lines, nav } = formatCustomerPage(orchestrator.customerSearchState);
 
   await orchestrator.saveSessionState(orchestrator.getSessionKey(context));
 
   return {
     success: true,
-    answer: `Found ${customers.length} customers matching '${userInput}':\n\n${lines}${nav}\n\nPlease reply with the number or Customer # you want to continue with.`,
+    answer:
+      `Found ${customers.length} customers matching '${searchTerm}' ` +
+      `(filter: contains(CustomerName,'${safe}')):\n\n${lines}${nav}` +
+      `\n\nPlease reply with the number or Customer # you want to continue with.` +
+      (hitLimit ? `\nMore results may exist — say Next to keep paging.` : ""),
     showPagination: true,
     awaitingCustomerSelection: true,
     options: customers,
