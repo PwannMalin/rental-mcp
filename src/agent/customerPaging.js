@@ -111,11 +111,41 @@ export async function handleCustomerSearchNav(
   context,
   ui,
 ) {
-  const state = orchestrator.customerSearchState;
+  let state = orchestrator.customerSearchState;
+  if (!state) {
+    // Initialize state for full search with empty filtered and page 0
+    state = { filtered: [], page: 0, pageSize: 10, checkRequests: false };
+    orchestrator.customerSearchState = state;
+  }
   if (!state) return null;
 
   const sessionKey = orchestrator.getSessionKey(context);
   const text = orchestrator.getCleanValue(userInput).toLowerCase();
+
+  // Perform full search with OData filter using contains for customerName
+  const filterQuery = `contains(CustomerName, '${text}')`;
+  const allResults = [];
+  let skip = 0;
+  const top = 50;
+  while (true) {
+    const result = await orchestrator.registry.execute(
+      "search.execute",
+      {
+        type: "CUSTOMER",
+        filterQuery,
+        topCount: top,
+        skipCount: skip,
+      },
+      context
+    );
+    const rows = orchestrator.getRowsFromToolResult(result);
+    if (!rows.length) break;
+    allResults.push(...rows);
+    if (rows.length < top) break;
+    skip += top;
+  }
+  state.filtered = allResults;
+  state.page = 0;
 
   if (text.includes("next")) {
     const maxPage = Math.ceil(state.filtered.length / state.pageSize) - 1;
