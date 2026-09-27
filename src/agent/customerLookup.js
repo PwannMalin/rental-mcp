@@ -31,6 +31,11 @@ export function looksLikeCustomerSearch(userText) {
     return false;
   }
 
+  // Detect vague or ambiguous phrases that should not trigger literal search
+  if (/\b(one or more of them|some of them|any of them|several of them|a few of them)\b/.test(text)) {
+    return false;
+  }
+
   // "find requests for clampitt paper" IS a customer search
   // (name first, then requests by CustomerNumber)
   if (/\b(customer|customers|find|look up|lookup|search for)\b/.test(text)) {
