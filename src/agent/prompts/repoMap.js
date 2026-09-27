@@ -7,7 +7,7 @@ Existing modules (use only these unless search proves a gap):
 - src/agent/requestFlow.js — active request, request lines
 - src/agent/copilotOrchestrator.js — routing only; avoid large edits
 - src/jobs/criticBatch.js / notifyCritiques.js / architectPR.js
-- src/agent/customeStore.js
+- src/agent/critiqueStore.js
 - src/agent/chatlog.js
 - src/agent/runcritic.js
 - src/agent/prompts/architect.js

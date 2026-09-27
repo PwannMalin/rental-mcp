@@ -73,3 +73,66 @@ export async function tryResolvePendingCustomerSelection(
     answer: `Found ${rows.length} rental request(s) for customer ${match.CustomerNumber} (${match.Branch || match.customerName}):\n\n${requestList}\n\nYou can say "show request lines" or "details" for more information.`,
   };
 }
+
+export async function handleCustomerSearchNav(
+  orchestrator,
+  userInput,
+  context,
+  ui,
+) {
+  const state = orchestrator.customerSearchState;
+  if (!state?.filtered?.length) return null;
+
+  const sessionKey = orchestrator.getSessionKey(context);
+  const text = orchestrator.getCleanValue(userInput).toLowerCase();
+
+  const goPage = async (nextPage) => {
+    state.page = nextPage;
+    if (state.checkRequests) {
+      const enriched = await enrichPageWithRequests(
+        orchestrator,
+        state,
+        context,
+        ui,
+      );
+      const pageResult = formatRequestPage(enriched, state);
+      orchestrator.pendingCustomerSelection = pageResult.withRequests.length
+        ? { options: pageResult.withRequests }
+        : { options: state.filtered };
+      await orchestrator.saveSessionState(sessionKey);
+      return {
+        success: true,
+        answer: pageResult.answer,
+        showPagination: pageResult.showPagination,
+      };
+    }
+    const { lines, nav } = formatCustomerPage(state);
+    orchestrator.pendingCustomerSelection = { options: state.filtered };
+    await orchestrator.saveSessionState(sessionKey);
+    return {
+      success: true,
+      answer: `Page ${state.page + 1}:\n\n${lines}${nav}`,
+      showPagination: true,
+    };
+  };
+
+  if (/\bnext\b/.test(text)) {
+    const maxPage = Math.max(
+      0,
+      Math.ceil(state.filtered.length / state.pageSize) - 1,
+    );
+    if (state.page >= maxPage) {
+      return { success: true, answer: "You're already on the last page." };
+    }
+    return goPage(state.page + 1);
+  }
+
+  if (/\b(prev|previous)\b/.test(text)) {
+    if (state.page <= 0) {
+      return { success: true, answer: "You're already on the first page." };
+    }
+    return goPage(state.page - 1);
+  }
+
+  return null;
+}
