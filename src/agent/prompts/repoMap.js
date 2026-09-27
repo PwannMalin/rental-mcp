@@ -26,10 +26,15 @@ Existing modules (use only these unless search proves a gap):
 - src/tools/requestHeaderTool.js
 - src/tools/powerAutomateTool.js
 - src/tools/get-rental.js
+- src/tools/list-rentals.js
+- src/tools/githubTool.js
 - src/tools/extract-rental.js
 - src/tools/emailTool.js
 - src/tools/download-rental.js
 - src/tools/dbTool.js
+- src/index.js
+- src/orchestrator.js
+- src/formatTeamsResponse.js
 
 Rules:
 - Current year is ${new Date().getFullYear()}.
