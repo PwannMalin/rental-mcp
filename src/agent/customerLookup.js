@@ -1,3 +1,9 @@
+import {
+  formatCustomerPage,
+  enrichPageWithRequests,
+  formatRequestPage,
+} from "./customerPaging.js";
+
 function extractCustomerSearchTerm(userText) {
   const text = String(userText || "").trim();
   if (!text) return "";
