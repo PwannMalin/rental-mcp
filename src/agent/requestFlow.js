@@ -212,11 +212,43 @@ export async function tryResolvePendingRequestAction(
     `Fetching request lines for RequestID ${orchestrator.activeRequest.RequestID}...`,
   );
 
+  const customerResult = await orchestrator.registry.execute(
+    "search.execute",
+    {
+      type: "CUSTOMER",
+      filterQuery: `contains(CustomerName,'Clampitt Paper')`,
+      topCount: 10,
+    },
+    context,
+  );
+
+  const customerRows = orchestrator.getRowsFromToolResult(customerResult);
+  if (customerRows.length === 0) {
+    return {
+      success: true,
+      answer: "I couldn't find any customers matching 'Clampitt Paper'. Did you mean something else? Here are some suggestions: ...",
+    };
+  }
+
+  // If many customers found, show partial list
+  if (customerRows.length > 5) {
+    return {
+      success: true,
+      answer: `Found ${customerRows.length} customers matching 'Clampitt Paper'. Please specify which one you mean.`,
+      options: customerRows.slice(0, 5).map(c => ({
+        CustomerNumber: c.CustomerNumber,
+        CustomerName: c.CustomerName
+      })),
+    };
+  }
+
+  // Proceed to get rental requests for first customer
+  const customerNumber = customerRows[0].CustomerNumber;
   const result = await orchestrator.registry.execute(
     "search.execute",
     {
-      type: "REQUEST_LINES",
-      filterQuery: `RequestDate ge ${orchestrator.dateFilters.currentYear.start.toISOString()} and RequestDate le ${orchestrator.dateFilters.currentYear.end.toISOString()}`,
+      type: "RENTAL",
+      filterQuery: `CustomerNumber eq '${customerNumber}' and RequestDate ge ${orchestrator.dateFilters.currentYear.start.toISOString()} and RequestDate le ${orchestrator.dateFilters.currentYear.end.toISOString()}`,
       topCount: 50,
     },
     context,
