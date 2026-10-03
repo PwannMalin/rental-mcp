@@ -55,8 +55,13 @@ export async function searchCustomersFromText(
   context,
   ui,
 ) {
-  const searchTerm =
-    extractCustomerSearchTerm(userInput) || String(userInput || "").trim();
+  const searchTerm = extractCustomerSearchTerm(userInput);
+  if (!searchTerm) {
+    return {
+      success: false,
+      answer: "Please provide a customer name to search for.",
+    };
+  }
   const safe = searchTerm.replace(/'/g, "''");
   const checkRequests = wantsRequestCheck(userInput);
 
