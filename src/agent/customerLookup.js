@@ -62,6 +62,9 @@ export async function searchCustomersFromText(
       answer: "Please provide a customer name to search for.",
     };
   }
+  const rawTerm = String(userInput || "").trim();
+  const searchTerm =
+    extractCustomerSearchTerm(rawTerm.replace(/[?.,!]+$/g, "")) || rawTerm.replace(/[?.,!]+$/g, "");
   const safe = searchTerm.replace(/'/g, "''");
   const checkRequests = wantsRequestCheck(userInput);
 
