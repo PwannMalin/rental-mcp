@@ -212,51 +212,49 @@ export async function tryResolvePendingRequestAction(
     `Fetching request lines for RequestID ${orchestrator.activeRequest.RequestID}...`,
   );
 
+  const customerNames = userText.match(/customers? ([\w ,]+)/i)?.[1]?.split(/,|and/)?.map(s => s.trim()).filter(Boolean) || [];
+
+let allRequests = [];
+
+for (const name of customerNames.length ? customerNames : ['Clampitt Paper']) {
   const customerResult = await orchestrator.registry.execute(
     "search.execute",
     {
       type: "CUSTOMER",
-      filterQuery: `contains(CustomerName,'Clampitt Paper')`,
+      filterQuery: `contains(CustomerName,'${name}')`,
       topCount: 10,
     },
     context,
   );
 
   const customerRows = orchestrator.getRowsFromToolResult(customerResult);
-  if (customerRows.length === 0) {
-    return {
-      success: true,
-      answer: "I couldn't find any customers matching 'Clampitt Paper'. Did you mean something else? Here are some suggestions: ...",
-    };
+  if (customerRows.length === 0) continue;
+
+  for (const customer of customerRows) {
+    const customerNumber = customer.CustomerNumber;
+    const rentalResult = await orchestrator.registry.execute(
+      "search.execute",
+      {
+        type: "RENTAL",
+        filterQuery: `CustomerNumber eq '${customerNumber}' and RequestDate ge ${orchestrator.dateFilters.currentYear.start.toISOString()} and RequestDate le ${orchestrator.dateFilters.currentYear.end.toISOString()}`,
+        topCount: 50,
+      },
+      context,
+    );
+    const rentalRows = orchestrator.getRowsFromToolResult(rentalResult);
+    allRequests = allRequests.concat(rentalRows);
   }
+}
 
-  // If many customers found, show partial list
-  if (customerRows.length > 5) {
-    return {
-      success: true,
-      answer: `Found ${customerRows.length} customers matching 'Clampitt Paper'. Please specify which one you mean.`,
-      options: customerRows.slice(0, 5).map(c => ({
-        CustomerNumber: c.CustomerNumber,
-        CustomerName: c.CustomerName
-      })),
-    };
-  }
+  if (allRequests.length === 0) {
+  return {
+    success: true,
+    answer: `I couldn't find any rental requests for the specified customers. Please check the customer names and try again.`,
+  };
+}
 
-  // Proceed to get rental requests for first customer
-  const customerNumber = customerRows[0].CustomerNumber;
-  const result = await orchestrator.registry.execute(
-    "search.execute",
-    {
-      type: "RENTAL",
-      filterQuery: `CustomerNumber eq '${customerNumber}' and RequestDate ge ${orchestrator.dateFilters.currentYear.start.toISOString()} and RequestDate le ${orchestrator.dateFilters.currentYear.end.toISOString()}`,
-      topCount: 50,
-    },
-    context,
-  );
+orchestrator.captureSchema("REQUEST_LINES", { rows: allRequests });
+orchestrator.activeRequest.lines = allRequests;
 
-  orchestrator.captureSchema("REQUEST_LINES", result);
-  const rows = orchestrator.getRowsFromToolResult(result);
-  orchestrator.activeRequest.lines = rows;
-
-  return formatRequestLinesAnswer(orchestrator, rows, userText);
+return formatRequestLinesAnswer(orchestrator, allRequests, userText);
 }
