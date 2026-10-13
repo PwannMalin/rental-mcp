@@ -90,12 +90,49 @@ function fingerprint(critique, action) {
   return crypto.createHash("sha256").update(basis).digest("hex").slice(0, 16);
 }
 
+/**
+ * Group chats by userKey+tenantKey and return the last 2–3 turns before the current one.
+ */
+function getPriorTurns(allChats, current) {
+  if (!current.userKey) return [];
+
+  const sameUser = allChats
+    .filter(
+      (c) =>
+        c.userKey === current.userKey &&
+        c.tenantKey === current.tenantKey &&
+        c.id !== current.id &&
+        new Date(c.ts) < new Date(current.ts),
+    )
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+    .slice(0, 3)
+    .reverse(); // oldest first
+
+  return sameUser.map((c) => ({
+    userInput: c.userInput,
+    answer: c.answer,
+    ts: c.ts,
+  }));
+}
+
+function buildSessionHints(chat) {
+  return {
+    source: chat.source,
+    showPagination: !!chat.showPagination,
+    awaitingCustomerSelection: !!chat.awaitingCustomerSelection,
+    hasPendingCustomerSelection: !!chat.hasPendingCustomerSelection,
+    customerSearchStateExists: !!chat.customerSearchStateExists,
+    lastSearchType: chat.lastSearchType || null,
+    optionsCount: chat.optionsCount ?? null,
+  };
+}
+
 async function main() {
   const limit = Number(process.env.CRITIC_BATCH_LIMIT || DEFAULT_LIMIT);
   const llm = createAzureOpenAI();
 
   const chats = await readChatsFromCosmos(limit);
-  
+
   const prior = await readAllCritiques();
   const already = new Set(prior.map((p) => p.chatId).filter(Boolean));
 
@@ -106,7 +143,7 @@ async function main() {
 
   console.log(
     `Critic batch: ${candidates.length} new chat(s) ` +
-      `(skipped ${already.size} already critiqued)`
+      `(skipped ${already.size} already critiqued)`,
   );
 
   let ok = 0;
@@ -116,16 +153,16 @@ async function main() {
     try {
       console.log(`→ ${chat.id}: "${(chat.userInput || "").slice(0, 60)}"`);
 
+      const priorTurns = getPriorTurns(chats, chat);
+      const sessionHints = buildSessionHints(chat);
+
       const critique = await runCritic({
         llm,
         userInput: chat.userInput,
         draftAnswer: chat.answer,
         toolSummary: null,
-        sessionHints: {
-          source: chat.source,
-          showPagination: chat.showPagination,
-          awaitingCustomerSelection: chat.awaitingCustomerSelection,
-        },
+        sessionHints,
+        priorTurns,
       });
 
       const action = classifyAction(critique);
@@ -144,7 +181,7 @@ async function main() {
 
       console.log(
         `  approve=${critique.approve} severity=${critique.severity} ` +
-          `action=${action} fp=${fp}`
+          `action=${action} fp=${fp} priorTurns=${priorTurns.length}`,
       );
       ok++;
     } catch (err) {
@@ -173,4 +210,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
