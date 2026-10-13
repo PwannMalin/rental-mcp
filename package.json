@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test src/tests/core.test.js src/sql/test-sql.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "regression": "node src/jobs/regressionCheck.js"
   },
   "keywords": [],
   "author": "",
