@@ -19,13 +19,11 @@ import {
   formatRequestPage,
   handleCustomerSearchNav,
 } from "./customerPaging.js";
-
+import { tryBatchRequestCheck } from "./batchRequestCheck.js";
 import {
   looksLikeCustomerSearch,
   searchCustomersFromText,
 } from "./customerLookup.js";
-
-import { tryBatchRequestCheck } from "./batchRequestCheck.js";
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
     this.registry = registry;
@@ -194,13 +192,19 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
-
     // Early: operate on existing list for meta-commands like "loop through these"
-    if (this.pendingCustomerSelection?.options?.length || this.customerSearchState) {
-      const batchResult = await tryBatchRequestCheck(this, userInput, context, ui);
+    if (
+      this.pendingCustomerSelection?.options?.length ||
+      this.customerSearchState
+    ) {
+      const batchResult = await tryBatchRequestCheck(
+        this,
+        userInput,
+        context,
+        ui,
+      );
       if (batchResult) return batchResult;
     }
-
     const namedRequests =
       userText.match(/find (.+?) requests?/) ||
       userText.match(/requests? for (.+)/);
@@ -601,17 +605,397 @@ export class CopilotOrchestrator {
                   enriched.push({ ...customer, requestCount: 0 });
                 }
               }
+
+              const withRequests = enriched.filter((c) => c.requestCount > 0);
+              const list = withRequests.length ? withRequests : enriched;
+
+              this.pendingCustomerSelection = { options: list };
+              this.customerSearchState = null;
+              await this.saveSessionState(sessionKey);
+
+              const lines = list.map(
+                (c, i) =>
+                  `${i + 1}. ${c.customerName} — Branch: ${c.Branch} — Customer #: ${c.CustomerNumber}${c.requestCount != null ? ` — Requests: ${c.requestCount}` : ""}`,
+              );
+
+              return {
+                success: true,
+                answer:
+                  `Narrowed to ${list.length} customer(s) for "${originalTerm || "your search"}" in ${text.toUpperCase()}` +
+                  (withRequests.length
+                    ? ` (${withRequests.length} with open requests)`
+                    : "") +
+                  `:\n\n${lines.join("\n")}\n\nReply with the number or Customer #.`,
+              };
             }
+
+            state.allCustomers = allCustomers;
+            state.filtered = allCustomers;
+            state.page = 0;
+            state.filterQuery = newFilter;
+            state.hitLimit = allCustomers.length >= 100;
+
+            const { lines, nav } = this.formatCustomerPage(state);
+            await this.saveSessionState(sessionKey);
+
+            return {
+              success: true,
+              answer:
+                `Narrowed to ${allCustomers.length} customers` +
+                (state.hitLimit ? " (there may be more)" : "") +
+                ` for branch/name "${text}".\n\n` +
+                lines +
+                nav +
+                `\n\nYou can keep narrowing, use Next/Prev, or say "only with open requests".`,
+              showPagination: true,
+            };
           }
         }
+
+        if (
+          clientNarrowed.length > 0 &&
+          clientNarrowed.length < state.allCustomers.length
+        ) {
+          state.filtered = clientNarrowed;
+          state.page = 0;
+
+          const { lines, nav } = this.formatCustomerPage(state);
+          await this.saveSessionState(sessionKey);
+          return {
+            success: true,
+            answer:
+              `Narrowed to ${clientNarrowed.length} customers (from the current list).\n\n` +
+              lines +
+              nav,
+            showPagination: true,
+          };
+        }
+      }
+    } // end if (this.customerSearchState)
+
+    if (looksLikeGlobalRequestQuery) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const now = new Date();
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      await ui.update(`Searching rental requests from ${from} to today…`);
+
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `date(RequestedOn) ge date(${from}) and date(RequestedOn) le date(${today})`,
+          topCount: 50,
+        },
+        context,
+      );
+
+      const rows = this.getRowsFromToolResult(rentalResult);
+      return {
+        success: true,
+        answer: rows.length
+          ? `Found ${rows.length} rental request(s) so far this year (showing up to 50).`
+          : `No rental requests found from ${range.ge.slice(0, 10)} through today. I searched the request table by date, not by customer.`,
+      };
+    }
+    // Check if there is an active customer context (activeRequest with CustomerNumber)
+
+    // 1) Customer pick (e.g. "1" or customer #)
+    const selectionResult = await this.tryResolvePendingCustomerSelection(
+      userInput,
+      context,
+      ui,
+    );
+    if (selectionResult) {
+      return selectionResult;
+    }
+
+    // 2) Request pick (when multiple RequestIDs were listed)
+    const requestSelectionResult = await this.tryResolvePendingRequestSelection(
+      userInput,
+      context,
+      ui,
+    );
+    if (requestSelectionResult) {
+      return requestSelectionResult;
+    }
+
+    // 3) Request lines / equipment for activeRequest
+    const requestActionResult = await this.tryResolvePendingRequestAction(
+      userInput,
+      context,
+      ui,
+    );
+    if (requestActionResult) {
+      return requestActionResult;
+    }
+
+    const { userId, tenantId } = context;
+
+    let messages = this.buildSystemPrompt(userId, tenantId);
+    messages.push({ role: "user", content: userInput });
+
+    for (let step = 0; step < this.maxSteps; step++) {
+      await ui.typing();
+
+      try {
+        const response = await this.llm.chat.completions.create({
+          model: process.env.AZURE_OPENAI_DEPLOYMENT,
+          messages,
+          tools: this.buildTools(),
+          tool_choice: "auto",
+          temperature: 0.3,
+        });
+
+        const msg = response.choices[0].message;
+
+        console.log("========== LLM RESPONSE ==========");
+        console.log("content:", msg.content);
+        console.log("tool calls:", JSON.stringify(msg.tool_calls, null, 2));
+        console.log("==================================");
+
+        // Final answer (no tool calls)
+        if (msg.content && !msg.tool_calls?.length) {
+          await ui.update("Finalizing response...");
+          let answer = msg.content;
+
+          if (
+            answer.toLowerCase().includes("unable to search") ||
+            answer.toLowerCase().includes("no customer")
+          ) {
+            answer =
+              "I couldn't find matching customer data at the moment. " + answer;
+          }
+
+          await this.saveSessionState(sessionKey);
+          return { success: true, answer };
+        }
+
+        // Tool calls
+        if (msg.tool_calls?.length) {
+          messages.push(msg);
+
+          for (const call of msg.tool_calls) {
+            const toolName = call.function.name;
+            await ui.update(`Using: ${toolName}`);
+
+            let args = {};
+            try {
+              args = JSON.parse(call.function.arguments || "{}");
+            } catch (e) {
+              args = {};
+            }
+
+            // Normalize common LLM argument aliases
+            if (toolName === "search.execute") {
+              args.type = String(
+                args.type || args.searchType || args.SearchType || "",
+              )
+                .trim()
+                .toUpperCase();
+
+              args.SearchTerm =
+                args.SearchTerm ||
+                args.searchTerm ||
+                args.searchText ||
+                args.SearchText ||
+                args.query ||
+                "";
+            }
+
+            let result;
+
+            try {
+              console.log("Calling tool:", toolName);
+              console.log("Arguments:", args);
+              if (toolName === "search.execute") {
+                args = applyDateFilter(userInput, args);
+              }
+              result = await this.registry.execute(toolName, args, context);
+
+              if (result?.success) {
+                const type = String(args?.type || "").toUpperCase();
+                if (type && this.discoveredSchemas.hasOwnProperty(type)) {
+                  this.captureSchema(type, result);
+                }
+              }
+              const searchTerm = String(args.SearchTerm || userInput || "")
+                .replace(/['"]/g, "")
+                .trim();
+              const safeTerm = searchTerm.replace(/'/g, "''");
+              const normalizedType = String(args?.type || "").toUpperCase();
+              const rows = this.getRowsFromToolResult(result);
+
+              if (toolName === "search.execute" && result?.success) {
+                this.lastSearchResults = rows;
+                this.lastSearchType = normalizedType;
+              }
+
+              // === MULTI CUSTOMER HANDLING (with pagination + clarification) ===
+              if (
+                toolName === "search.execute" &&
+                normalizedType === "CUSTOMER" &&
+                rows.length > 0
+              ) {
+                return searchCustomersFromText(
+                  this,
+                  args.SearchTerm || userInput,
+                  context,
+                  ui,
+                );
+              }
+
+              // Remember active rental request
+              const looksLikeRentalResult =
+                result?.data?.searchType === "RENTAL" ||
+                result?.searchType === "RENTAL" ||
+                normalizedType === "RENTAL";
+
+              if (looksLikeRentalResult && result.success) {
+                this.rememberActiveRequest(result, args, context);
+              }
+
+              console.log(
+                "ACTIVE REQUEST AFTER TOOL:",
+                JSON.stringify(this.activeRequest, null, 2),
+              );
+
+              // Handle older tools that return requiresSelection
+              if (result?.requiresSelection && result?.options?.length) {
+                this.pendingCustomerSelection = {
+                  options: result.options.map((c) => ({
+                    CustomerNumber: c.customerNumber || c.CustomerNumber,
+                    Branch: c.branch || c.Branch,
+                    customerName: c.customerName || c.CustomerName,
+                  })),
+                };
+
+                await this.saveSessionState(sessionKey);
+
+                return {
+                  success: true,
+                  answer:
+                    "Multiple customer locations found.\n\n" +
+                    result.options
+                      .map(
+                        (c, i) =>
+                          `${i + 1}. ${c.customerName || c.CustomerName} (${c.branch || c.Branch})`,
+                      )
+                      .join("\n"),
+                  awaitingCustomerSelection: true,
+                  options: result.options,
+                  showPagination: true,
+                };
+              }
+
+              console.log("TOOL RESULT:", JSON.stringify(result, null, 2));
+            } catch (toolErr) {
+              console.error(`Tool ${toolName} failed:`, toolErr.message);
+              result = {
+                success: false,
+                error: toolErr.message,
+                message: `The ${toolName} tool encountered an issue.`,
+              };
+            }
+
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: JSON.stringify(result),
+            });
+
+            await ui.update(`Completed: ${toolName}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error in step ${step}:`, err);
+        return {
+          success: false,
+          answer: `ERROR: ${err.message}`,
+        };
       }
     }
 
-    // The remainder of the original file logic continues here unchanged.
-    // Full original content after the early route insertion is preserved in the local patch.
     return {
       success: false,
-      answer: "Orchestrator logic continues (full file upload pending verification).",
+      answer: "I couldn't complete the request after several attempts.",
     };
+  }
+
+  buildTools() {
+    const tools = this.registry?.tools || {};
+    const toolList =
+      tools instanceof Map ? Array.from(tools.values()) : Object.values(tools);
+
+    const builtTools = toolList.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description || "No description provided",
+        parameters: t.parameters ||
+          t.inputSchema ||
+          t.schema || {
+            type: "object",
+            properties: {},
+          },
+      },
+    }));
+
+    console.log(
+      "TOOLS EXPOSED TO GPT:",
+      builtTools.map((t) => t.function.name),
+    );
+
+    return builtTools;
+  }
+
+  buildSystemPrompt(userId, tenantId) {
+    const memory = this.memory?.get?.(userId, tenantId) || {
+      customers: [],
+      rentals: [],
+      lastActions: [],
+      context: {},
+    };
+
+    const lastDomain = memory.context?.lastSearchDomain || "none";
+    const lastParams = memory.context?.lastSearchParams || {};
+
+    return [
+      {
+        role: "system",
+        content: `
+You are a helpful internal Rental Assistant.
+${currentTimePromptBlock()}
+### Critical Tool Rules
+- Always include the "type" parameter when calling search.execute.
+- Valid types: CUSTOMER, RENTAL, REQUEST_LINES, EQUIPMENT
+- Correct: { "type": "CUSTOMER", "filterQuery": "contains(CustomerName,'Clampitt')" }
+- Incorrect: { "filterQuery": "contains(CustomerName,'Clampitt')" }
+
+### Business Rules
+- Customer name only → search CUSTOMER first
+- Customer number → search RENTAL using CustomerNumber
+- Equipment serial / series / model → search EQUIPMENT or REQUEST_LINES
+- Never search RENTAL using CustomerName
+
+### Conversation Context (very important)
+- Current last search domain: ${lastDomain}
+- Last search parameters: ${JSON.stringify(lastParams)}
+- Keep the same domain unless the user clearly changes topic.
+- Example: if previous turn was about equipment and user says "oh chargers", stay in EQUIPMENT domain.
+- Do not switch domains on short ambiguous replies.
+
+### Memory
+Recent customers: ${JSON.stringify(memory.customers.slice(0, 4))}
+Recent rentals: ${JSON.stringify(memory.rentals.slice(0, 4))}
+Recent actions: ${JSON.stringify(memory.lastActions.slice(0, 4))}
+
+### Response Rules
+- Be concise and specific.
+- When no results are found, say what you searched and suggest a next step.
+- Avoid repeating the exact same search.
+- Ask clarifying questions when the request is ambiguous.
+                `.trim(),
+      },
+    ];
   }
 }
