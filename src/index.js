@@ -538,6 +538,12 @@ async function bootstrap() {
           success: true,
           showPagination: !!result.showPagination,
           awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+          sessionHints: {
+            hasPendingCustomerSelection: !!copilot.pendingCustomerSelection?.options?.length,
+            customerSearchStateExists: !!copilot.customerSearchState,
+            lastSearchType: copilot.lastSearchType || null,
+            optionsCount: copilot.pendingCustomerSelection?.options?.length || copilot.customerSearchState?.allCustomers?.length || null,
+          },
         });
 
         res.json({
@@ -618,6 +624,12 @@ async function bootstrap() {
               success: true,
               showPagination: !!result.showPagination,
               awaitingCustomerSelection: !!result.awaitingCustomerSelection,
+              sessionHints: {
+                hasPendingCustomerSelection: !!copilot.pendingCustomerSelection?.options?.length,
+                customerSearchStateExists: !!copilot.customerSearchState,
+                lastSearchType: copilot.lastSearchType || null,
+                optionsCount: copilot.pendingCustomerSelection?.options?.length || copilot.customerSearchState?.allCustomers?.length || null,
+              },
             });
 
             await ui.sendFinal(result.answer || "I received your message.");
@@ -645,10 +657,10 @@ async function bootstrap() {
     });
 
     app.listen(PORT, () => {
-      console.log(`🚀 MCP Server running on port ${PORT}`);
+      console.log(`🚀 Server running on port ${PORT}`);
     });
   } catch (err) {
-    console.error("💥 Fatal startup error:", err);
+    console.error("Bootstrap failed:", err);
     process.exit(1);
   }
 }
