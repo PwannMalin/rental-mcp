@@ -13,8 +13,11 @@ function hashUser(userId) {
 
 /**
  * Append one chat turn. Never throws to the caller.
+ * sessionHints (optional) is stored so the critic can see state context.
  */
 export async function logChatTurn(entry) {
+  const sessionHints = entry.sessionHints || {};
+
   const row = {
     id: entry.id || crypto.randomUUID(),
     ts: new Date().toISOString(),
@@ -27,6 +30,11 @@ export async function logChatTurn(entry) {
     showPagination: !!entry.showPagination,
     awaitingCustomerSelection: !!entry.awaitingCustomerSelection,
     error: entry.error || null,
+    // Compact session snapshot for the critic
+    hasPendingCustomerSelection: !!sessionHints.hasPendingCustomerSelection,
+    customerSearchStateExists: !!sessionHints.customerSearchStateExists,
+    lastSearchType: sessionHints.lastSearchType || null,
+    optionsCount: typeof sessionHints.optionsCount === "number" ? sessionHints.optionsCount : null,
   };
 
   // Local file (keep for now)
