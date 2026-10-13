@@ -7,12 +7,14 @@ export async function runCritic({
   draftAnswer,
   toolSummary = null,
   sessionHints = null,
+  priorTurns = null,
 }) {
   const user = buildCriticUserPayload({
     userInput,
     draftAnswer,
     toolSummary,
     sessionHints,
+    priorTurns,
   });
 
   let raw;
@@ -23,7 +25,7 @@ export async function runCritic({
       user,
       toolChoice: "none",
       temperature: 0.2,
-      maxTokens: 1500,
+      maxTokens: 1800,
     });
     raw = result.content;
   } catch (err) {
@@ -53,7 +55,7 @@ export async function runCritic({
           "You fix invalid JSON. Return only a valid JSON object matching the Critic schema. No markdown.",
         user: `Fix this into valid Critic JSON:\n\n${raw}`,
         temperature: 0,
-        maxTokens: 1500,
+        maxTokens: 1800,
       });
       return parseJsonFromAgent(repair.content);
     } catch {
