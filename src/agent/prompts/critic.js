@@ -26,10 +26,24 @@ and the user says something like:
 - "check requests on all of them"
 - "do that for the list"
 - "process the list you just gave me"
+- "of that list find requests"
+- "search each one for rental requests"
+- "under any of them"
 
 the bot MUST operate on the existing list (pendingCustomerSelection or customerSearchState).
 Treating that phrase as a brand-new contains(CustomerName, '…') search is a high-severity context-loss bug.
 Evidence of the bug includes the assistant searching for the meta-phrase itself as a customer name.
+
+## List-question rule (high severity)
+When a customer list is pending and the user asks a question about it, for example:
+- "was that the full list"
+- "how many were there"
+- "which branches"
+- "are those all the Clampitt customers"
+- "was that all of them"
+
+the bot MUST answer from the existing list (count, branches, sample names).
+Treating the question as a new contains(CustomerName, '…') search is a high-severity context-loss bug.
 
 ## What to flag
 - Wrong or missing OData filters
