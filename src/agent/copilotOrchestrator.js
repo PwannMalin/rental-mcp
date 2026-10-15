@@ -12,7 +12,7 @@ import {
   tryResolvePendingRequestSelection,
   tryResolvePendingRequestAction,
 } from "./requestFlow.js";
-
+import { summarizePayload, decideNextAction } from "./payloadRouter.js";
 import {
   formatCustomerPage,
   enrichPageWithRequests,
@@ -205,6 +205,23 @@ export class CopilotOrchestrator {
       );
       if (batchResult) return batchResult;
     }
+
+    // Early: act on the shape of the last payload when the intent is obvious
+    if (this.lastSearchResults?.length) {
+      const summary = summarizePayload(this.lastSearchType, {
+        rows: this.lastSearchResults,
+      });
+      const next = decideNextAction(summary, userInput);
+      if (next?.action === "searchRentals" && next.customerNumber) {
+        // call your existing rental search by CustomerNumber here, or fall through
+        // for now just log so you can wire the actual call
+        console.log("payloadRouter suggested:", next);
+      }
+      if (next) {
+        // later: dispatch next.action; for now the router only advises
+      }
+    }
+
     const namedRequests =
       userText.match(/find (.+?) requests?/) ||
       userText.match(/requests? for (.+)/);
