@@ -1,11 +1,6 @@
 /**
  * Detects meta-commands that should operate on an existing customer list
  * instead of starting a new CustomerName search.
- *
- * Examples: "loop through these", "for each of the above",
- * "check requests on all of them", "do that for the list",
- * "of that list find requests under any of them",
- * "search each one for rental requests".
  */
 
 const BATCH_PATTERNS = [
@@ -26,6 +21,12 @@ const BATCH_PATTERNS = [
   /\bsearch (the |that )?list\b/i,
   /\beach (one|customer|of them)\b/i,
   /\ball of (them|the customers|those)\b/i,
+  /\byou just listed\b/i,
+  /\bthe customers you just listed\b/i,
+  /\bdo any of (those|them|these)\b/i,
+  /\bany of (those|them)\b/i,
+  /\bthose have (rental )?requests\b/i,
+  /\bthose (customers|ones)\b/i,
 ];
 
 export function looksLikeBatchOnExistingList(userText) {
