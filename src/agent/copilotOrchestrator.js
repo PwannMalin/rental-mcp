@@ -12,7 +12,12 @@ import {
   tryResolvePendingRequestSelection,
   tryResolvePendingRequestAction,
 } from "./requestFlow.js";
-import { summarizePayload, decideNextAction } from "./payloadRouter.js";
+import {
+  summarizePayload,
+  decideNextAction,
+  executePayloadAction,
+} from "./payloadRouter.js";
+import { tryAnswerListQuestion } from "./listQuestions.js";
 import {
   formatCustomerPage,
   enrichPageWithRequests,
@@ -206,19 +211,32 @@ export class CopilotOrchestrator {
       if (batchResult) return batchResult;
     }
 
+    // Early: answer questions about the current list
+    if (
+      this.pendingCustomerSelection?.options?.length ||
+      this.customerSearchState
+    ) {
+      const listAnswer = tryAnswerListQuestion(this, userInput);
+      if (listAnswer) return listAnswer;
+    }
+
     // Early: act on the shape of the last payload when the intent is obvious
     if (this.lastSearchResults?.length) {
       const summary = summarizePayload(this.lastSearchType, {
         rows: this.lastSearchResults,
       });
       const next = decideNextAction(summary, userInput);
-      if (next?.action === "searchRentals" && next.customerNumber) {
-        // call your existing rental search by CustomerNumber here, or fall through
-        // for now just log so you can wire the actual call
-        console.log("payloadRouter suggested:", next);
-      }
       if (next) {
-        // later: dispatch next.action; for now the router only advises
+        const actionResult = await executePayloadAction(
+          this,
+          next,
+          context,
+          ui,
+        );
+        if (actionResult) {
+          await this.saveSessionState(sessionKey);
+          return actionResult;
+        }
       }
     }
 
