@@ -3,7 +3,9 @@
  * instead of starting a new CustomerName search.
  *
  * Examples: "loop through these", "for each of the above",
- * "check requests on all of them", "do that for the list".
+ * "check requests on all of them", "do that for the list",
+ * "of that list find requests under any of them",
+ * "search each one for rental requests".
  */
 
 const BATCH_PATTERNS = [
@@ -14,6 +16,16 @@ const BATCH_PATTERNS = [
   /\bprocess the list\b/i,
   /\bcheck all of them\b/i,
   /\bfind requests for (these|all of them|the list)\b/i,
+  /\bof that list\b/i,
+  /\bof the list\b/i,
+  /\bsearch each one\b/i,
+  /\bcheck each one\b/i,
+  /\bany of them\b/i,
+  /\bunder any of them\b/i,
+  /\brequests under (any|all)\b/i,
+  /\bsearch (the |that )?list\b/i,
+  /\beach (one|customer|of them)\b/i,
+  /\ball of (them|the customers|those)\b/i,
 ];
 
 export function looksLikeBatchOnExistingList(userText) {
