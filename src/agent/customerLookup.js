@@ -5,24 +5,35 @@ import {
 } from "./customerPaging.js";
 
 function extractCustomerSearchTerm(userText) {
-  const text = String(userText || "").trim();
+  let text = String(userText || "").trim();
   if (!text) return "";
 
-  const stripped = text
-    .replace(/^(can you |could you |please |hey |hi )+/i, "")
-    .replace(/\b(find|look up|lookup|search for|show|get|list)\b/gi, " ")
+  // Strip leading intent + filler
+  text = text
+    .replace(/^(can you |could you |please |hey |hi |ok |okay )+/i, "")
+    .replace(
+      /^(find|look up|lookup|search for|show|get|list|pull)\s+(me\s+)?(some\s+)?(open\s+)?(requests?|rentals?)?\s*(for|from|named|called)?\s*/i,
+      "",
+    )
     .replace(/\b(requests?|rentals?|open requests?|rental requests?)\b/gi, " ")
-    .replace(/\b(for|from|named|called|customer|customers|the|a|an)\b/gi, " ")
+    .replace(
+      /\b(for|from|named|called|customer|customers|the|a|an|me|some)\b/gi,
+      " ",
+    )
+    .replace(/[?.,!]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  return stripped;
+  // Reject obviously bad terms
+  if (!text || text.length < 3) return "";
+  if (/\b(loop|through|these|them|list|all of them)\b/i.test(text)) return "";
+
+  return text;
 }
 
 export function looksLikeCustomerSearch(userText) {
   const text = String(userText || "").toLowerCase();
 
-  // Metrics / date questions are not a customer directory search
   if (
     /\b(how many|what date|what time|what year|this year|past month)\b/.test(
       text,
@@ -31,18 +42,16 @@ export function looksLikeCustomerSearch(userText) {
     return false;
   }
 
-  // Detect vague or ambiguous phrases that should not trigger literal search
-  if (/\b(one or more of them|some of them|any of them|several of them|a few of them)\b/.test(text)) {
+  if (
+    /\b(one or more of them|some of them|any of them|several of them|a few of them|loop through|check all|all of them)\b/.test(
+      text,
+    )
+  ) {
     return false;
   }
 
-  // "find requests for clampitt paper" IS a customer search
-  // (name first, then requests by CustomerNumber)
-  if (/\b(customer|customers|find|look up|lookup|search for)\b/.test(text)) {
-    return Boolean(extractCustomerSearchTerm(userText));
-  }
-
-  return false;
+  const term = extractCustomerSearchTerm(userText);
+  return Boolean(term && term.length >= 3);
 }
 
 export function wantsRequestCheck(userText) {
@@ -57,7 +66,8 @@ export async function searchCustomersFromText(
 ) {
   const rawTerm = String(userInput || "").trim();
   const searchTerm =
-    extractCustomerSearchTerm(rawTerm.replace(/[?.,!]+$/g, "")) || rawTerm.replace(/[?.,!]+$/g, "");
+    extractCustomerSearchTerm(rawTerm.replace(/[?.,!]+$/g, "")) ||
+    rawTerm.replace(/[?.,!]+$/g, "");
   const safe = searchTerm.replace(/'/g, "''");
   const checkRequests = wantsRequestCheck(userInput);
 

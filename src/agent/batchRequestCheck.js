@@ -21,12 +21,19 @@ const BATCH_PATTERNS = [
   /\bsearch (the |that )?list\b/i,
   /\beach (one|customer|of them)\b/i,
   /\ball of (them|the customers|those)\b/i,
+<<<<<<< HEAD
   /\byou just listed\b/i,
   /\bthe customers you just listed\b/i,
   /\bdo any of (those|them|these)\b/i,
   /\bany of (those|them)\b/i,
   /\bthose have (rental )?requests\b/i,
   /\bthose (customers|ones)\b/i,
+=======
+  /\bloop through\b.+\b(and find|and check|requests?)\b/i,
+  /\bloop through\b.+\b(clampitt|paper|customers?)\b/i,
+  /\b(check|find)\s+(requests?|rentals?)\s+(for|on)\s+(all|them|these|the list)\b/i,
+  /\bfor all (of them|customers?|accounts?)\b/i,
+>>>>>>> b86102b (Move Architect searchRepo after critique is selected)
 ];
 
 export function looksLikeBatchOnExistingList(userText) {
@@ -35,14 +42,36 @@ export function looksLikeBatchOnExistingList(userText) {
   return BATCH_PATTERNS.some((re) => re.test(text));
 }
 
-export async function tryBatchRequestCheck(orchestrator, userInput, context, ui) {
-  if (!looksLikeBatchOnExistingList(userInput)) {
+export async function tryBatchRequestCheck(
+  orchestrator,
+  userInput,
+  context,
+  ui,
+) {
+  const hasList =
+    orchestrator.pendingCustomerSelection?.options?.length ||
+    orchestrator.customerSearchState?.allCustomers?.length ||
+    orchestrator.customerSearchState?.filtered?.length;
+
+  const looksBatch = looksLikeBatchOnExistingList(userInput);
+
+  // Also treat “loop through X and find requests” as batch when we already have a list
+  const loopAndRequests =
+    /\bloop through\b/i.test(userInput) &&
+    /\b(request|rental)/i.test(userInput);
+
+  if (!looksBatch && !(hasList && loopAndRequests)) {
     return null;
   }
 
+  // ... rest of the function stays the same
+
   // Prefer the explicit pending selection; fall back to the full search state
   let customers = orchestrator.pendingCustomerSelection?.options || [];
-  if (!customers.length && orchestrator.customerSearchState?.allCustomers?.length) {
+  if (
+    !customers.length &&
+    orchestrator.customerSearchState?.allCustomers?.length
+  ) {
     customers = orchestrator.customerSearchState.allCustomers;
   }
   if (!customers.length && orchestrator.customerSearchState?.filtered?.length) {
@@ -54,7 +83,7 @@ export async function tryBatchRequestCheck(orchestrator, userInput, context, ui)
       success: true,
       answer:
         "I don't have a current customer list to loop through. " +
-        "Try a customer search first, then say \"loop through these\" or \"check requests on all of them\".",
+        'Try a customer search first, then say "loop through these" or "check requests on all of them".',
     };
   }
 

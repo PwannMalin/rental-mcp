@@ -212,12 +212,18 @@ export class CopilotOrchestrator {
     }
 
     // Early: answer questions about the current list
+    // Early: operate on existing list for meta-commands like "loop through these"
     if (
       this.pendingCustomerSelection?.options?.length ||
       this.customerSearchState
     ) {
-      const listAnswer = tryAnswerListQuestion(this, userInput);
-      if (listAnswer) return listAnswer;
+      const batchResult = await tryBatchRequestCheck(
+        this,
+        userInput,
+        context,
+        ui,
+      );
+      if (batchResult) return batchResult;
     }
 
     // Early: act on the shape of the last payload when the intent is obvious
