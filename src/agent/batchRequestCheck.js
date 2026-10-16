@@ -21,19 +21,16 @@ const BATCH_PATTERNS = [
   /\bsearch (the |that )?list\b/i,
   /\beach (one|customer|of them)\b/i,
   /\ball of (them|the customers|those)\b/i,
-<<<<<<< HEAD
   /\byou just listed\b/i,
   /\bthe customers you just listed\b/i,
   /\bdo any of (those|them|these)\b/i,
   /\bany of (those|them)\b/i,
   /\bthose have (rental )?requests\b/i,
   /\bthose (customers|ones)\b/i,
-=======
   /\bloop through\b.+\b(and find|and check|requests?)\b/i,
   /\bloop through\b.+\b(clampitt|paper|customers?)\b/i,
   /\b(check|find)\s+(requests?|rentals?)\s+(for|on)\s+(all|them|these|the list)\b/i,
   /\bfor all (of them|customers?|accounts?)\b/i,
->>>>>>> b86102b (Move Architect searchRepo after critique is selected)
 ];
 
 export function looksLikeBatchOnExistingList(userText) {
