@@ -118,6 +118,7 @@ function getPriorTurns(allChats, current) {
 function buildSessionHints(chat) {
   return {
     source: chat.source,
+    isSuggestion: !!chat.isSuggestion,
     showPagination: !!chat.showPagination,
     awaitingCustomerSelection: !!chat.awaitingCustomerSelection,
     hasPendingCustomerSelection: !!chat.hasPendingCustomerSelection,
