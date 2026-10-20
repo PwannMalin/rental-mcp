@@ -45,6 +45,13 @@ When a customer list is pending and the user asks a question about it, for examp
 the bot MUST answer from the existing list (count, branches, sample names).
 Treating the question as a new contains(CustomerName, '…') search is a high-severity context-loss bug.
 
+## User-suggestion rule
+When sessionHints.isSuggestion is true (or the userInput starts with /suggest or SUGGESTION:),
+treat the message as an explicit improvement request from the user.
+- Prefer needsCodeChange: true and fixType: "logic" or "prompt" when the suggestion is concrete.
+- Put the suggestion itself into requiredFixes and acceptanceCriteria.
+- Do not treat it as a normal end-user rental query.
+
 ## What to flag
 - Wrong or missing OData filters
 - Context loss (forgot activeRequest / pending selection / customerSearchState)
