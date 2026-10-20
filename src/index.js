@@ -529,13 +529,15 @@ async function bootstrap() {
           },
         );
 
+        const isSuggestion = /^(\/suggest\b|SUGGESTION:)/i.test(message);
         await logChatTurn({
-          source: "web",
+          source: isSuggestion ? "user-suggestion" : "web",
           userId: req.body.userId,
           tenantId: req.body.tenantId,
           userInput: message,
           answer: result.answer,
           success: true,
+          isSuggestion,
           showPagination: !!result.showPagination,
           awaitingCustomerSelection: !!result.awaitingCustomerSelection,
           sessionHints: {
@@ -562,6 +564,7 @@ async function bootstrap() {
           userInput: message,
           answer: "",
           success: false,
+          isSuggestion: /^(\/suggest\b|SUGGESTION:)/i.test(message),
           error: err.message,
         });
 
@@ -615,13 +618,15 @@ async function bootstrap() {
 
             console.log("✅ Copilot returned:", result);
 
+            const isSuggestion = /^(\/suggest\b|SUGGESTION:)/i.test(text);
             await logChatTurn({
-              source: "teams",
+              source: isSuggestion ? "user-suggestion" : "teams",
               userId,
               tenantId,
               userInput: text,
               answer: result.answer,
               success: true,
+              isSuggestion,
               showPagination: !!result.showPagination,
               awaitingCustomerSelection: !!result.awaitingCustomerSelection,
               sessionHints: {
@@ -643,6 +648,7 @@ async function bootstrap() {
               userInput: text,
               answer: "",
               success: false,
+              isSuggestion: /^(\/suggest\b|SUGGESTION:)/i.test(text),
               error: err.message,
             });
 
