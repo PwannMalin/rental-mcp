@@ -30,6 +30,7 @@ export async function logChatTurn(entry) {
     showPagination: !!entry.showPagination,
     awaitingCustomerSelection: !!entry.awaitingCustomerSelection,
     error: entry.error || null,
+    isSuggestion: !!entry.isSuggestion,
     // Compact session snapshot for the critic
     hasPendingCustomerSelection: !!sessionHints.hasPendingCustomerSelection,
     customerSearchStateExists: !!sessionHints.customerSearchStateExists,
