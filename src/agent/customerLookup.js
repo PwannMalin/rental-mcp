@@ -4,29 +4,29 @@ import {
   formatRequestPage,
 } from "./customerPaging.js";
 
-function extractCustomerSearchTerm(userText) {
+export function extractCustomerSearchTerm(userText) {
   let text = String(userText || "").trim();
   if (!text) return "";
 
-  // Strip leading intent + filler
+  // Ignore suggestions and meta-feedback
+  if (/^(suggestion:|perfect!!|now since there is only one)/i.test(text))
+    return "";
+
+  // More conservative stripping
   text = text
-    .replace(/^(can you |could you |please |hey |hi |ok |okay )+/i, "")
+    .replace(/^(can you |could you |please |hey |hi )+/i, "")
     .replace(
-      /^(find|look up|lookup|search for|show|get|list|pull)\s+(me\s+)?(some\s+)?(open\s+)?(requests?|rentals?)?\s*(for|from|named|called)?\s*/i,
+      /^(find|look up|lookup|search for|show|get|list)\s+(me\s+)?(open\s+)?(requests?|rentals?)\s+(for|from)\s+/i,
       "",
     )
-    .replace(/\b(requests?|rentals?|open requests?|rental requests?)\b/gi, " ")
-    .replace(
-      /\b(for|from|named|called|customer|customers|the|a|an|me|some)\b/gi,
-      " ",
-    )
+    .replace(/\b(requests?|rentals?|open requests?)\b/gi, " ")
     .replace(/[?.,!]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  // Reject obviously bad terms
   if (!text || text.length < 3) return "";
-  if (/\b(loop|through|these|them|list|all of them)\b/i.test(text)) return "";
+  if (/\b(loop|through|these|them|list|all of them|suggestion)\b/i.test(text))
+    return "";
 
   return text;
 }
@@ -165,7 +165,30 @@ export async function searchCustomersFromText(
       options: orchestrator.pendingCustomerSelection.options,
     };
   }
-
+  if (checkRequests && pageResult.withRequests?.length === 1) {
+    const only = pageResult.withRequests[0];
+    // Immediately fetch the requests for that single customer and return them
+    const rentalResult = await orchestrator.registry.execute(
+      "search.execute",
+      {
+        type: "RENTAL",
+        filterQuery: `Customer eq '${only.CustomerNumber}'`,
+        topCount: 20,
+      },
+      context,
+    );
+    const rows = orchestrator.getRowsFromToolResult(rentalResult);
+    // format and return the request list (reuse existing formatting helpers)
+    // clear pending selection so we don't ask again
+    orchestrator.pendingCustomerSelection = null;
+    return {
+      success: true,
+      answer:
+        `Found 1 customer with open requests (${only.customerName}, #${only.CustomerNumber}).\n\n` +
+        formatRequestList(rows), // your existing formatter
+      awaitingCustomerSelection: false,
+    };
+  }
   orchestrator.pendingCustomerSelection = { options: customers };
 
   const { lines, nav } = formatCustomerPage(orchestrator.customerSearchState);

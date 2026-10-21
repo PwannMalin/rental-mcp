@@ -3,7 +3,12 @@ import {
   applyDateFilter,
   currentTimePromptBlock,
 } from "./dateFilters.js";
-
+import {
+  extractCustomerSearchTerm,
+  looksLikeCustomerSearch,
+  searchCustomersFromText,
+  wantsRequestCheck,
+} from "./customerLookup.js";
 import { tryResolvePendingCustomerSelection } from "./customerSelection.js";
 import {
   getRequestId,
@@ -197,6 +202,28 @@ export class CopilotOrchestrator {
       "more",
     ];
     const userText = this.getCleanValue(userInput).toLowerCase();
+    // Answer questions about the current customer list
+    if (
+      this.pendingCustomerSelection?.options?.length ||
+      this.customerSearchState
+    ) {
+      const listAnswer = tryAnswerListQuestion(this, userInput);
+      if (listAnswer) {
+        await this.saveSessionState(sessionKey);
+        return listAnswer;
+      }
+    }
+    if (
+      /^(suggestion:|perfect!!|now since there is only one)/i.test(
+        userInput.trim(),
+      )
+    ) {
+      return {
+        success: true,
+        answer:
+          "Thanks — noted. I’ll treat a single matching request as the one to continue with instead of asking again.",
+      };
+    }
     // Early: operate on existing list for meta-commands like "loop through these"
     if (
       this.pendingCustomerSelection?.options?.length ||
@@ -246,9 +273,10 @@ export class CopilotOrchestrator {
       }
     }
 
-    const namedRequests =
-      userText.match(/find (.+?) requests?/) ||
-      userText.match(/requests? for (.+)/);
+    const namedRequestMatch =
+      userText.match(
+        /\b(?:find|get|show|list|search)\s+(?:me\s+)?(?:open\s+)?requests?\s+(?:for|from)\s+(.+?)(?:\?|$)/i,
+      ) || userText.match(/\brequests?\s+(?:for|from)\s+(.+?)(?:\?|$)/i);
 
     if (
       /what date|what time|what day|what's the date|whats the date|current date|current year|what year/.test(
@@ -259,9 +287,19 @@ export class CopilotOrchestrator {
       return { success: true, answer: `Today is ${t.local} (year ${t.year}).` };
     }
 
-    if (namedRequests) {
-      const name = namedRequests[1].replace(/paper/gi, "").trim();
-      return searchCustomersFromText(this, name, context, ui);
+    if (namedRequestMatch && wantsRequestCheck(userInput)) {
+      const rawName = namedRequestMatch[1].trim();
+      const cleanedName =
+        extractCustomerSearchTerm(rawName) ||
+        rawName.replace(/[?.,!]+$/g, "").trim();
+
+      if (
+        cleanedName &&
+        cleanedName.length >= 3 &&
+        !/^(me|this|that|the|these|those)$/i.test(cleanedName)
+      ) {
+        return searchCustomersFromText(this, cleanedName, context, ui);
+      }
     }
 
     if (
