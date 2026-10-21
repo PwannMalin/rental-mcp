@@ -4,7 +4,7 @@ import {
   formatRequestPage,
 } from "./customerPaging.js";
 
-function extractCustomerSearchTerm(userText) {
+export function extractCustomerSearchTerm(userText) {
   let text = String(userText || "").trim();
   if (!text) return "";
 
@@ -47,15 +47,7 @@ export function looksLikeCustomerSearch(userText) {
   const text = String(userText || "").toLowerCase();
 
   if (
-    /\b(how many|what date|what time|what year|this year|past month|suggestion:|perfect!!|one with a request|any customer named|list of requests for any)\b/.test(
-      text,
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    /\b(how many|what date|what time|what year|this year|past month)\b/.test(
+    /\b(how many|what date|what time|what year|this year|past month|suggestion:|perfect!!|one with a request|any customer named|list of requests for any|find me one with)\b/.test(
       text,
     )
   ) {
@@ -100,7 +92,6 @@ export async function searchCustomersFromText(
   let allRows = [];
   let hitLimit = false;
 
-  // Page the customer directory until exhausted or a hard cap
   const maxPages = 10;
   for (let page = 0; page < maxPages; page += 1) {
     const customerResult = await orchestrator.registry.execute(
@@ -167,6 +158,40 @@ export async function searchCustomersFromText(
       enriched,
       orchestrator.customerSearchState,
     );
+
+    // Auto-proceed if exactly one customer has requests
+    if (pageResult.withRequests?.length === 1) {
+      const only = pageResult.withRequests[0];
+      const rentalResult = await orchestrator.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `Customer eq '${only.CustomerNumber}'`,
+          topCount: 20,
+        },
+        context,
+      );
+      const rows = orchestrator.getRowsFromToolResult(rentalResult);
+      orchestrator.pendingCustomerSelection = null;
+      orchestrator.customerSearchState = null;
+
+      return {
+        success: true,
+        answer:
+          `Found 1 customer with open requests (${only.customerName}, #${only.CustomerNumber}).\n\n` +
+          (rows.length
+            ? rows
+                .slice(0, 10)
+                .map(
+                  (r, i) =>
+                    `${i + 1}. Request #${r.RequestID || r.RequestId || r.requestId || "—"}${r.RequestedOn ? ` — ${r.RequestedOn}` : ""}`,
+                )
+                .join("\n")
+            : "No open requests found."),
+        awaitingCustomerSelection: false,
+      };
+    }
+
     orchestrator.pendingCustomerSelection = pageResult.withRequests.length
       ? { options: pageResult.withRequests }
       : { options: customers };
@@ -185,30 +210,7 @@ export async function searchCustomersFromText(
       options: orchestrator.pendingCustomerSelection.options,
     };
   }
-  if (checkRequests && pageResult.withRequests?.length === 1) {
-    const only = pageResult.withRequests[0];
-    // Immediately fetch the requests for that single customer and return them
-    const rentalResult = await orchestrator.registry.execute(
-      "search.execute",
-      {
-        type: "RENTAL",
-        filterQuery: `Customer eq '${only.CustomerNumber}'`,
-        topCount: 20,
-      },
-      context,
-    );
-    const rows = orchestrator.getRowsFromToolResult(rentalResult);
-    // format and return the request list (reuse existing formatting helpers)
-    // clear pending selection so we don't ask again
-    orchestrator.pendingCustomerSelection = null;
-    return {
-      success: true,
-      answer:
-        `Found 1 customer with open requests (${only.customerName}, #${only.CustomerNumber}).\n\n` +
-        formatRequestList(rows), // your existing formatter
-      awaitingCustomerSelection: false,
-    };
-  }
+
   orchestrator.pendingCustomerSelection = { options: customers };
 
   const { lines, nav } = formatCustomerPage(orchestrator.customerSearchState);
