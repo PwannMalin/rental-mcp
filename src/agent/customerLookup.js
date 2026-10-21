@@ -4,28 +4,40 @@ import {
   formatRequestPage,
 } from "./customerPaging.js";
 
-export function extractCustomerSearchTerm(userText) {
+function extractCustomerSearchTerm(userText) {
   let text = String(userText || "").trim();
   if (!text) return "";
 
-  // Ignore suggestions and meta-feedback
-  if (/^(suggestion:|perfect!!|now since there is only one)/i.test(text))
+  // Ignore clear non-search / follow-up / meta phrases
+  if (
+    /^(ok |okay |now |please |hey |hi )*(find me one with|one with a|list of requests for any|any customer named|suggestion:|perfect!!)/i.test(
+      text,
+    )
+  ) {
     return "";
+  }
 
-  // More conservative stripping
   text = text
-    .replace(/^(can you |could you |please |hey |hi )+/i, "")
+    .replace(/^(can you |could you |please |hey |hi |ok |okay )+/i, "")
     .replace(
-      /^(find|look up|lookup|search for|show|get|list)\s+(me\s+)?(open\s+)?(requests?|rentals?)\s+(for|from)\s+/i,
+      /^(find|look up|lookup|search for|show|get|list|pull)\s+(me\s+)?(some\s+)?(open\s+)?(requests?|rentals?)\s+(for|from)\s+/i,
       "",
     )
-    .replace(/\b(requests?|rentals?|open requests?)\b/gi, " ")
+    .replace(/\b(requests?|rentals?|open requests?|rental requests?)\b/gi, " ")
+    .replace(
+      /\b(for|from|named|called|customer|customers|the|a|an|me|some|any|one|with)\b/gi,
+      " ",
+    )
     .replace(/[?.,!]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
   if (!text || text.length < 3) return "";
-  if (/\b(loop|through|these|them|list|all of them|suggestion)\b/i.test(text))
+  if (
+    /\b(loop|through|these|them|list|all of them|suggestion|perfect|one with|any)\b/i.test(
+      text,
+    )
+  )
     return "";
 
   return text;
@@ -33,6 +45,14 @@ export function extractCustomerSearchTerm(userText) {
 
 export function looksLikeCustomerSearch(userText) {
   const text = String(userText || "").toLowerCase();
+
+  if (
+    /\b(how many|what date|what time|what year|this year|past month|suggestion:|perfect!!|one with a request|any customer named|list of requests for any)\b/.test(
+      text,
+    )
+  ) {
+    return false;
+  }
 
   if (
     /\b(how many|what date|what time|what year|this year|past month)\b/.test(
