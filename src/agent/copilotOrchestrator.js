@@ -30,10 +30,7 @@ import {
   handleCustomerSearchNav,
 } from "./customerPaging.js";
 import { tryBatchRequestCheck } from "./batchRequestCheck.js";
-import {
-  looksLikeCustomerSearch,
-  searchCustomersFromText,
-} from "./customerLookup.js";
+
 export class CopilotOrchestrator {
   constructor({ registry, llm, memory }) {
     this.registry = registry;
