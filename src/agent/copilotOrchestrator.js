@@ -235,6 +235,79 @@ export class CopilotOrchestrator {
       if (batchResult) return batchResult;
     }
 
+    // Bare customer number while we have a pending customer list → select it
+    if (
+      /^\d{5,8}$/.test(userText) &&
+      this.pendingCustomerSelection?.options?.length
+    ) {
+      return this.tryResolvePendingCustomerSelection(userInput, context, ui);
+    }
+    // “request lines for 669001” / “lines for 669001”
+    const linesForMatch = userText.match(
+      /(?:request\s+lines?|lines?)\s+(?:for|on)\s+(\d{5,8})/i,
+    );
+    if (linesForMatch) {
+      const custNum = linesForMatch[1];
+      await ui.update(`Looking up requests and lines for customer ${custNum}…`);
+
+      const rentalResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "RENTAL",
+          filterQuery: `Customer eq '${custNum}'`,
+          topCount: 10,
+        },
+        context,
+      );
+      const rentalRows = this.getRowsFromToolResult(rentalResult);
+
+      if (!rentalRows.length) {
+        return {
+          success: true,
+          answer: `No open rental requests found for customer ${custNum}.`,
+        };
+      }
+
+      // For simplicity, take the first request and fetch its lines
+      const firstRequestId =
+        rentalRows[0].RequestID ||
+        rentalRows[0].RequestId ||
+        rentalRows[0].requestId;
+      if (!firstRequestId) {
+        return {
+          success: true,
+          answer: `Found request(s) for customer ${custNum} but could not determine a RequestID.`,
+        };
+      }
+
+      const linesResult = await this.registry.execute(
+        "search.execute",
+        {
+          type: "REQUEST_LINES",
+          filterQuery: `RequestID eq ${firstRequestId}`,
+          topCount: 50,
+        },
+        context,
+      );
+      const lineRows = this.getRowsFromToolResult(linesResult);
+
+      const lineText = lineRows.length
+        ? lineRows
+            .slice(0, 15)
+            .map((r, i) => {
+              const model = r.Model || r.EquipModel || r.model || "—";
+              const serial = r.Serial || r.SerialNumber || r.serial || "";
+              return `${i + 1}. ${model}${serial ? ` — Serial: ${serial}` : ""}`;
+            })
+            .join("\n")
+        : "No lines found.";
+
+      return {
+        success: true,
+        answer: `Request lines for customer ${custNum} (Request #${firstRequestId}):\n\n${lineText}`,
+      };
+    }
+
     // Early: answer questions about the current list
     // Early: operate on existing list for meta-commands like "loop through these"
     if (
@@ -320,7 +393,7 @@ export class CopilotOrchestrator {
       return {
         success: true,
         answer: rows.length
-          ? `Found ${rows.length} rental request(s) so far ${range.label} (showing up to 50).`
+          ? `Found ${rows.length} rental request(s) from ${fromDate} through today (showing up to 50).`
           : `No rental requests found from ${fromDate} through today.`,
       };
     }
@@ -345,7 +418,7 @@ export class CopilotOrchestrator {
       return {
         success: true,
         answer: rows.length
-          ? `Found ${rows.length} rental request(s) so far ${range.label} (showing up to 50).`
+          ? `Found ${rows.length} rental request(s) from ${fromDate} to today.`
           : `No rental requests found from ${fromDate} through today. I searched RequestHeader by RequestedOn.`,
       };
     }
@@ -360,6 +433,32 @@ export class CopilotOrchestrator {
         answer: `Today is ${t.local} (year ${t.year}).`,
       };
     }
+
+    const itemMatch = userText.match(
+      /(?:requests?|rentals?).*(?:ask for|for|with|containing)\s+([a-z0-9\s]+)/i,
+    );
+    if (itemMatch) {
+      const term = itemMatch[1].trim();
+      await ui.update(`Searching request lines for "${term}"…`);
+      // Use whatever filter your REQUEST_LINES / EQUIPMENT tool supports
+      const result = await this.registry.execute(
+        "search.execute",
+        {
+          type: "REQUEST_LINES",
+          filterQuery: `contains(Model,'${term.replace(/'/g, "''")}') or contains(Descrip,'${term.replace(/'/g, "''")}')`,
+          topCount: 25,
+        },
+        context,
+      );
+      const rows = this.getRowsFromToolResult(result);
+      return {
+        success: true,
+        answer: rows.length
+          ? `Found ${rows.length} request line(s) matching "${term}".`
+          : `No request lines found matching "${term}".`,
+      };
+    }
+
     if (
       looksLikeCustomerSearch(userText) &&
       (!this.activeRequest || !this.activeRequest.CustomerNumber)
@@ -750,27 +849,24 @@ export class CopilotOrchestrator {
     } // end if (this.customerSearchState)
 
     if (looksLikeGlobalRequestQuery) {
-      const pad = (n) => String(n).padStart(2, "0");
       const now = new Date();
-      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-      await ui.update(`Searching rental requests from ${from} to today…`);
-
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const fromDate = `${year}-${month}-01`;
+      const today = `${year}-${month}-${String(now.getDate()).padStart(2, "0")}`;
+      await ui.update(`Searching rental requests from ${fromDate} to today…`);
+      const filterQuery = `date(RequestedOn) ge date(${fromDate}) and date(RequestedOn) le date(${today})`;
       const rentalResult = await this.registry.execute(
         "search.execute",
-        {
-          type: "RENTAL",
-          filterQuery: `date(RequestedOn) ge date(${from}) and date(RequestedOn) le date(${today})`,
-          topCount: 50,
-        },
+        { type: "RENTAL", filterQuery, topCount: 50 },
         context,
       );
-
       const rows = this.getRowsFromToolResult(rentalResult);
       return {
         success: true,
         answer: rows.length
-          ? `Found ${rows.length} rental request(s) so far this year (showing up to 50).`
-          : `No rental requests found from ${range.ge.slice(0, 10)} through today. I searched the request table by date, not by customer.`,
+          ? `Found ${rows.length} rental request(s) from ${fromDate} to ${today} (showing up to 50).`
+          : `No rental requests found from ${fromDate} through today. I searched RequestHeader by RequestedOn.`,
       };
     }
     // Check if there is an active customer context (activeRequest with CustomerNumber)
